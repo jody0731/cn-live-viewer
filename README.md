@@ -88,6 +88,13 @@ Keys in the player:
 
 All of mpv's usual keys work too.
 
+With the mouse:
+- **Control bar:** moving the mouse shows a slim bar at the bottom, in place of mpv's own. It has play/pause, the
+  room name (click it for the room list), the chat overlay, volume (click to mute, scroll to change) and
+  fullscreen. Hover a button to see what it does.
+- **Right-click menu:** Rooms (click one to switch), Chat overlay, Fullscreen and Quit. Right-click never pauses in
+  cn-live-viewer's window.
+
 ## The room list
 
 `~/.config/cn-live-viewer/rooms.conf`, created on the first run. One room per line:
@@ -123,7 +130,8 @@ cn-live-viewer starts its own mpv with these options:
 --profile=high-quality --hwdec=auto-safe --video-sync=display-resample --interpolation --tscale=oversample --window-maximized=yes
 ```
 
-They are passed on the command line, so they win over the same options in your `mpv.conf`. Everything else in
+It also turns off mpv's own control bar (`--osc=no`) and draws its own. These options are passed on the command
+line, so they win over the same options in your `mpv.conf`. Everything else in
 your `mpv.conf` and `input.conf` still applies. Change them with `--mpv-args`, which comes last, for example:
 
 ```bash

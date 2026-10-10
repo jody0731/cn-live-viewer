@@ -18,6 +18,7 @@ cn-live-viewer rooms                   list saved rooms and where the list is
 ROOM is a Huya or Douyin room number or link. Bare numbers are Huya rooms unless saved as Douyin.
 In mpv:  Tab  room list: Enter switches; the entries after the rooms add, save, rename or remove rooms
          C    chat overlay on/off
+         mouse: the bar at the bottom (click the room name for the room list), right-click for a menu
 """
 
 

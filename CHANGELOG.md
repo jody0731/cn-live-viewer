@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 (2026-10-11)
+
+- Mouse controls. A slim control bar for live streams replaces mpv's own: play/pause, the room name (click it for
+  the room list), chat overlay, volume and fullscreen, with tooltips. Subtitles, audio tracks, playlist, chapters
+  and seeking are gone.
+- Right-click menu: switch rooms, chat overlay, fullscreen, quit. Right-click no longer pauses.
+
 ## 0.4.0 (2026-10-11)
 
 - Set the default room (the one played on start) from the room list. The list marks it.

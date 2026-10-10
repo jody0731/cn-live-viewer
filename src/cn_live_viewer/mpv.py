@@ -16,7 +16,7 @@ class Mpv:
     async def start(self):
         self.proc = await asyncio.create_subprocess_exec(
             'mpv', '--idle=yes', '--force-window=yes', f'--input-ipc-server={self.sock}',
-            '--user-agent=Mozilla/5.0', '--title=${media-title}',
+            '--user-agent=Mozilla/5.0', '--title=${media-title}', '--osc=no',   # bar.lua replaces mpv's control bar
             *[f'--script={s}' for s in self.scripts], *self.extra_args,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
         for _ in range(150):

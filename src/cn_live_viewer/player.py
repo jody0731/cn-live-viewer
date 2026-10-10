@@ -10,7 +10,7 @@ from . import douyin, huya, rooms as roomlist
 from .mpv import Mpv
 
 log = logging.getLogger(__name__)
-SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua')]
+SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua', 'bar.lua')]
 # smooth 60 fps on high-refresh monitors, sharper upscaling, GPU decoding, a maximized (not fullscreen) window;
 # your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--profile=high-quality', '--hwdec=auto-safe', '--video-sync=display-resample',

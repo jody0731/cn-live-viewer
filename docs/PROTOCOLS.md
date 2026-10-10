@@ -125,3 +125,9 @@ talk through `script-message`:
 | `cnlv-rename <platform> <room> <name>` | picker.lua → controller | rename a saved room |
 | `cnlv-remove <platform> <room>` | picker.lua → controller | remove a saved room |
 | `cnlv-default <platform> <room>` | picker.lua → controller | move a saved room to the top of the list, which makes it the default |
+
+The three scripts:
+- **danmaku.lua** draws the chat. It publishes whether the overlay is on in the property `user-data/cnlv/chat`.
+- **picker.lua** handles the room list (Tab) and fills mpv's right-click menu (`menu-data`).
+- **bar.lua** is the control bar. Its buttons call the other two through `script-binding picker/cnlv-picker` and
+  `script-binding danmaku/cnlv-toggle-danmaku`.

@@ -1,15 +1,49 @@
 -- Room picker for cn-live-viewer. Tab opens the saved rooms; Enter switches to one. The entries after the rooms
 -- add a room by number or link, save the room you're watching, rename or remove a saved room, or set the default
 -- room (the first in the list, played on start). Typing filters the list.
+-- It also fills mpv's right-click menu: the rooms, the chat overlay, fullscreen and quit.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
 local utils = require "mp.utils"
 local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 0.39 or newer
 
 local rooms, playing = {}, false
 
+-- the right-click menu (mpv's menu-data); rebuilt when the rooms, the chat overlay or fullscreen change
+local function update_menu()
+    local room_items = {}
+    for _, r in ipairs(rooms) do
+        room_items[#room_items + 1] = { title = r.name, state = r.current and { "checked" } or nil,
+                                        cmd = string.format("script-message cnlv-switch %s %s", r.platform, r.room) }
+    end
+    if #room_items > 0 then room_items[#room_items + 1] = { type = "separator" } end
+    room_items[#room_items + 1] = { title = "Manage rooms…", cmd = "script-binding picker/cnlv-picker", shortcut = "Tab" }
+    local chat = mp.get_property_native("user-data/cnlv/chat") ~= false
+    mp.set_property_native("menu-data", {
+        { type = "submenu", title = "Rooms", submenu = room_items },
+        { title = "Chat overlay", cmd = "script-binding danmaku/cnlv-toggle-danmaku", shortcut = "C",
+          state = chat and { "checked" } or nil },
+        { type = "separator" },
+        { title = "Fullscreen", cmd = "cycle fullscreen", shortcut = "F",
+          state = mp.get_property_bool("fullscreen") and { "checked" } or nil },
+        { title = "Quit", cmd = "quit", shortcut = "Q" },
+    })
+end
+mp.observe_property("user-data/cnlv/chat", "native", update_menu)
+mp.observe_property("fullscreen", "bool", update_menu)
+
+-- right-click opens that menu in cn-live-viewer's window (it would otherwise pause, or do nothing)
+mp.add_forced_key_binding("MBTN_RIGHT", "cnlv-context-menu", function()
+    if mp.get_property_bool("load-context-menu") then
+        mp.commandv("script-message-to", "context_menu", "open")   -- mpv's own drawn menu (Linux)
+    else
+        mp.commandv("context-menu")                                 -- the system's menu (Windows, macOS)
+    end
+end)
+
 mp.register_script_message("cnlv-rooms", function(json)
     local data = utils.parse_json(json) or {}
     rooms, playing = data.rooms or {}, data.playing
+    update_menu()
 end)
 
 local function send(...)

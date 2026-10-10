@@ -104,8 +104,15 @@ end)
 mp.register_script_message("cnlv-danmaku", add)
 mp.register_script_message("cnlv-danmaku-clear", function() items = {}; lane_free_at = {}; render() end)
 
+-- the on/off state, for the control bar and the right-click menu
+local function publish()
+    mp.set_property_native("user-data/cnlv/chat", enabled)
+end
+publish()
+
 mp.add_key_binding("c", "cnlv-toggle-danmaku", function()
     enabled = not enabled
     if not enabled then items = {}; lane_free_at = {}; render() end
+    publish()
     mp.osd_message(enabled and "Chat overlay on" or "Chat overlay off", 1.2)
 end)

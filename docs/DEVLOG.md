@@ -229,3 +229,30 @@ A custom menu without the search field was tried and dropped: the field is usefu
 
 Not fixed: mpv sizes this menu from the item with the most bytes, not the widest one, and measures it slightly
 short. The widest row can lose its last character, often the last digit of a Douyin room number.
+
+### Mouse controls
+
+Everything was keyboard-only, so mouse controls were added.
+
+**Control bar.** mpv's own control bar can't hide single buttons, and most of them do nothing for a live stream:
+subtitles, audio tracks, playlist, chapters, seeking. cn-live-viewer now starts mpv with `--osc=no`, and `bar.lua`
+draws a slim bar instead:
+- play/pause;
+- the room name, which opens the room list when clicked;
+- the chat overlay, volume (click to mute, scroll to change) and fullscreen.
+
+The bar shows on mouse movement, hides after 1.5 s, and has tooltips. It uses mpv's built-in icon font, so the
+icons match mpv's own. It takes clicks only inside its own area (an mpv mouse area), so clicks elsewhere still go to
+mpv.
+
+**Right-click menu.** It has Rooms (click to switch), Chat overlay with a tick when on, Fullscreen and Quit. It is
+mpv's own menu, filled through the `menu-data` property:
+- On Linux, mpv draws it with its `context_menu` script, which opens on a script message.
+- The `context-menu` command only opens the system menu on Windows and macOS.
+
+Right-click is bound only in cn-live-viewer's window, so it overrides `MBTN_RIGHT ignore` (or pause) there and
+nowhere else.
+
+**Test:** offline, on a test pattern with simulated mouse moves and clicks, every button did its job and the
+right-click menu showed the rooms and states. Then a short run on a live room in a 4K window confirmed the bar's
+scaling, the Chinese room name and the room entries in the menu.
