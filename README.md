@@ -91,7 +91,9 @@ All of mpv's usual keys work too.
 With the mouse:
 - **Control bar:** moving the mouse shows a slim bar at the bottom, in place of mpv's own. It hides 0.5 s after
   the mouse stops. Hover anything to see what it does.
-  - **Seek strip:** spans the part of the stream mpv has buffered. Click or drag to go back; the right end is live.
+  - **Seek row:** the playback time, a strip over the part of the stream mpv has buffered, and how many seconds are
+    buffered ahead (Cache). On the strip, red is played and light grey is received but not yet played. Click or
+    drag to go back; the right end is live.
   - **Left:** mpv's menu ☰ (key bindings, stream info, statistics, help), play/pause, and the LIVE badge. When
     you're behind, the badge shows how far (e.g. −0:42); click it to catch up. Then the room name: click it for the
     room list.

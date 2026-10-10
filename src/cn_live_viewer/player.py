@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 import zlib
 
@@ -16,7 +17,16 @@ SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.
 # your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--profile=high-quality', '--hwdec=auto-safe', '--video-sync=display-resample',
                     '--interpolation', '--tscale=oversample', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB']
+# Emoji: the chat font has none, so they fall back to the colour emoji font, whose glyphs are pictures, not outlines.
+# The overlay draws them as unreadable shapes, and while any are on screen video frames drop (measured: 12-55 a second
+# for each 🤡x7 message, until it scrolled off). The overlay leaves them out; the terminal still shows them.
+EMOJI = re.compile('[\U0001F000-\U0001FAFF\U000E0000-\U000E007F\uFE0E\uFE0F\u200D\u20E3]')
 COLORS = ['\033[96m', '\033[93m', '\033[92m', '\033[95m', '\033[94m', '\033[91m']
+
+
+def overlay_text(text: str) -> str:
+    """Chat text for the overlay: no emoji, spaces tidied. Empty when nothing else is left."""
+    return ' '.join(EMOJI.sub('', text).split())
 
 
 def print_chat(nick: str, text: str, color: bool) -> None:
@@ -72,8 +82,9 @@ class Player:
         try:
             async for nick, text in gen:
                 print_chat(nick, text, self.color)
-                if self.overlay:
-                    await self.mpv.command('script-message', 'cnlv-danmaku', text)
+                shown = overlay_text(text) if self.overlay else ''
+                if shown:
+                    await self.mpv.command('script-message', 'cnlv-danmaku', shown)
         except asyncio.CancelledError:
             raise
         except Exception as e:                       # chat is best effort; the video keeps playing

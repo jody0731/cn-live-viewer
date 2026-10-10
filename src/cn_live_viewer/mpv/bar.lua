@@ -1,5 +1,6 @@
 -- A slim control bar for live streams, in place of mpv's own (cn-live-viewer starts mpv with --osc=no).
--- Top: a seek strip over what mpv has buffered; click or drag to go back, the right end is live.
+-- Top: the playback time, a seek strip over what mpv has buffered (red: played, light: received but not yet
+-- played; click or drag to go back, the right end is live), and how many seconds are buffered ahead (Cache).
 -- Bottom row, left: mpv's menu, play/pause, the LIVE badge (how far behind live; click to catch up) and the room
 -- name, which opens the room list. Right: the chat overlay, volume and fullscreen.
 -- It shows when the mouse moves over the window and hides when the mouse rests. Each control has a tooltip.
@@ -15,7 +16,8 @@ local PLATFORM_FONTS = { linux = "Noto Sans CJK SC", darwin = "PingFang SC", win
 local FONT = PLATFORM_FONTS[mp.get_property("platform", "")] or "sans-serif"
 
 -- sizes for a 1080-pixel-high window; they scale with the window
-local SEEK_H, ROW_H, PAD, ICON, TEXT = 26, 60, 22, 34, 28
+local SEEK_H, ROW_H, PAD, ICON, TEXT, TIP = 22, 43, 18, 27, 22, 22   -- TIP: tooltip text
+local BAR_ALPHA = "C0"                     -- bar background transparency (00 opaque, FF invisible)
 local HIDE_AFTER = 0.5                      -- seconds without mouse movement
 local LIVE_SLACK = 10                       -- seconds behind the newest video that still count as live
 local LIVE_TARGET = 4                       -- "go live" lands this far behind the newest video, to keep a buffer
@@ -159,8 +161,11 @@ local function circle(cx, cy, r, colour)
                          m, m - c, m - c, m, m + c, d, m - c, d, m, d, m + c, m + c, d, m, d, m - c, d, m + c, m)
 end
 
-local function text(x, y, s, font, fs, colour)
-    return string.format("{\\an4\\pos(%d,%d)\\fn%s\\fs%d\\bord0\\shad0\\1c&H%s&}%s", px(x), px(y), font, fs, colour, s)
+-- text anchored at its left middle (an 4), or its right middle with an = 6; a faint dark outline keeps it readable
+-- over bright video now that the bar is mostly see-through
+local function text(x, y, s, font, fs, colour, an)
+    return string.format("{\\an%d\\pos(%d,%d)\\fn%s\\fs%d\\bord%.1f\\shad0\\3c&H000000&\\3a&H80&\\1c&H%s&}%s",
+                         an or 4, px(x), px(y), font, fs, 1.2 * k, colour, s)
 end
 
 local function render()
@@ -186,7 +191,7 @@ local function render()
         local c = colour(name, dim)
         local iw = icon and icon_fs * 1.05 or 0
         local lw = label and width(label, text_fs) or 0
-        local gap = (icon and label) and 8 * k or 0
+        local gap = (icon and label) and 6 * k or 0
         local w = iw + gap + lw
         local left = align == "left" and x or x - w
         if icon then out[#out + 1] = text(left, cy, icon, ICON_FONT, icon_fs, c) end
@@ -195,21 +200,32 @@ local function render()
         return w
     end
 
-    out[#out + 1] = rect(0, y0, W, H - y0, "000000", "30")
+    out[#out + 1] = rect(0, y0, W, H - y0, "000000", BAR_ALPHA)
 
-    -- seek strip: the buffered stretch, the part already played, and a handle at the playing position
-    strip_x0, strip_x1 = pad, W - pad
-    local sy = y0 + seek_h / 2 + 2 * k
+    -- seek row: playback time, the strip over the buffered stretch, and the buffer ahead ("Cache", as mpv's own bar)
+    local sy = y0 + seek_h / 2 + 1 * k
+    local lfs = px(TEXT * 0.8 * k)
+    local cache = (mp.get_property_native("demuxer-cache-state") or {})["cache-duration"]
+    local cache_text = ""
+    if cache then
+        cache_text = "Cache " .. (cache >= 60 and string.format("%dm%02ds", math.floor(cache / 60), math.floor(cache % 60))
+                                  or string.format("%ds", math.floor(cache)))
+    end
+    out[#out + 1] = text(pad, sy, mp.get_property_osd("playback-time", ""), FONT, lfs, "DDDDDD")
+    out[#out + 1] = text(W - pad, sy, cache_text, FONT, lfs, "DDDDDD", 6)
+    strip_x0 = pad + width("00:00:00", lfs) + 14 * k               -- fixed label widths, so the strip doesn't jitter
+    strip_x1 = W - pad - width("Cache 9m59s", lfs) - 14 * k
     local strip_hover = hovered == "seek" or dragging
-    local th = (strip_hover and 6 or 4) * k
+    local th = (strip_hover and 5 or 3) * k
     local first, newest = seek_range()
     local t = mp.get_property_number("time-pos")
-    out[#out + 1] = rect(strip_x0, sy - th / 2, strip_x1 - strip_x0, th, "707070", "40")
+    out[#out + 1] = rect(strip_x0, sy - th / 2, strip_x1 - strip_x0, th, "707070", "60")
     if first and t then
         local f = math.max(0, math.min(1, (t - first) / (newest - first)))
         local hx = strip_x0 + f * (strip_x1 - strip_x0)
-        out[#out + 1] = rect(strip_x0, sy - th / 2, hx - strip_x0, th, "4848E8")
-        out[#out + 1] = circle(hx, sy, (strip_hover and 9 or 7) * k, "FFFFFF")
+        out[#out + 1] = rect(hx, sy - th / 2, strip_x1 - hx, th, "E6E6E6", "60")  -- received, not yet played
+        out[#out + 1] = rect(strip_x0, sy - th / 2, hx - strip_x0, th, "4848E8")  -- played
+        out[#out + 1] = circle(hx, sy, (strip_hover and 8 or 6) * k, "FFFFFF")
     end
 
     -- right side, from the edge inwards
@@ -228,10 +244,10 @@ local function render()
     local behind = behind_live()
     local live = not behind or behind <= LIVE_SLACK
     local badge = live and "LIVE" or "−" .. clock(behind)
-    local dot_r = 6 * k
+    local dot_r = 5 * k
     out[#out + 1] = circle(x + dot_r, cy, dot_r, live and "3C3CFF" or "888888")
-    local bw = 2 * dot_r + 8 * k + width(badge, text_fs * 0.85)
-    out[#out + 1] = text(x + 2 * dot_r + 8 * k, cy, badge, FONT, px(text_fs * 0.85), colour("live", not live))
+    local bw = 2 * dot_r + 7 * k + width(badge, text_fs * 0.85)
+    out[#out + 1] = text(x + 2 * dot_r + 7 * k, cy, badge, FONT, px(text_fs * 0.85), colour("live", not live))
     areas[#areas + 1] = { "live", x - pad / 2, x + bw + pad / 2 }
     x = x + bw + 2 * pad
     local name, room_w = mp.get_property("media-title", ""), right_edge - x - 2 * pad
@@ -258,10 +274,10 @@ local function render()
         end
         if cx then
             local tip = CONTROLS[hovered].tip()
-            local tfs = px(TEXT * 0.8 * k)
+            local tfs = px(TIP * k)
             local tw, tht = width(tip, tfs) * 0.85 + 24 * k, px(tfs * 1.6)
             local tx = math.max(8 * k, math.min(cx - tw / 2, W - tw - 8 * k))
-            local ty = y0 - 10 * k - tht
+            local ty = y0 - 8 * k - tht
             out[#out + 1] = rect(tx, ty, tw, tht, "000000", "30")
             out[#out + 1] = text(tx + 12 * k, ty + tht / 2, esc(tip), FONT, tfs, "FFFFFF")
         end
@@ -277,7 +293,9 @@ end
 
 local function under_mouse()
     if not visible or mouse.y < bar_top then return nil end
-    if mouse.y < row_top then return "seek" end
+    if mouse.y < row_top then                        -- the seek row: only the strip itself (and a little margin)
+        return (mouse.x >= strip_x0 - 10 * k and mouse.x <= strip_x1 + 10 * k) and "seek" or nil
+    end
     for _, a in ipairs(areas) do
         if mouse.x >= a[2] and mouse.x <= a[3] then return a[1] end
     end

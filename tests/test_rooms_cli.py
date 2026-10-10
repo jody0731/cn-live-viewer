@@ -104,6 +104,11 @@ class PackageTest(unittest.TestCase):
         for path in player.SCRIPTS:
             self.assertTrue(os.path.isfile(path), path)
 
+    def test_overlay_leaves_out_emoji(self):
+        self.assertEqual(player.overlay_text('\U0001F921\U0001F921 nice  \u2764\ufe0f 666'), 'nice \u2764 666')
+        self.assertEqual(player.overlay_text('\U0001F921' * 7), '')
+        self.assertEqual(player.overlay_text('\u4e2d\u6587 \uff1f\uff1f'), '\u4e2d\u6587 \uff1f\uff1f')
+
     def test_chat_line_without_colour(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

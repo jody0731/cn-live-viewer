@@ -280,3 +280,30 @@ behind live. Clicking the badge brought it back to 7 s.
 
 **Simulated clicks:** they arrive as a single "press" event, not as separate down and up events. The bar handles
 both, so dragging works with a real mouse and clicks work from scripts.
+
+### Emoji in the chat made the video stutter
+
+On Huya rooms, unreadable shapes showed up in the chat and the video stuttered.
+
+**Overlay A/B:** while it happened, 46 and 107 frames dropped per 5 s with the overlay on, and 0 with it off.
+
+**Matching drops to messages:** a second chat client listened to the same room while frame drops were counted
+once a second for 40 s.
+- Chinese text, "？？？" included: no drops.
+- Each "🤡🤡🤡🤡🤡🤡🤡" message: 12–55 drops a second, until it had scrolled off about 9–12 s later.
+
+**Cause:** the chat font (Noto Sans CJK SC) has no emoji, so they fall back to the colour emoji font. Its glyphs are
+pictures, not outlines. libass draws them as unreadable shapes, and the cost repeats on every redraw while they are
+on screen, not just the first time.
+
+**Fix:** the overlay leaves emoji out (`overlay_text()` in player.py), and messages left empty are not shown. The
+terminal still prints them in full. Other characters the font lacks fall back to outline fonts, which are drawn
+once and reused, so they stay.
+
+### A slimmer bar, with time and buffer readouts
+
+After trying a few sizes, the control bar ended at three quarters of its first height, with a 75% see-through
+background. A faint dark outline keeps the text readable over bright video.
+
+The seek row now has mpv's own readouts: the playback time on the left and "Cache", the seconds buffered ahead, on
+the right. The strip shows played (red) and received but not yet played (light grey).

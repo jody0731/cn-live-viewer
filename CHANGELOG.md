@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 (2026-10-11)
+
+- The control bar is slimmer (three quarters of its old height) and mostly see-through.
+- The seek row shows the playback time on the left and the seconds buffered ahead on the right ("Cache", as
+  mpv's own bar). On the strip, red is what's played and light grey is what's received but not yet played.
+- The chat overlay leaves out emoji. They showed as unreadable shapes and made the video drop frames while on
+  screen. The terminal still shows them.
+
 ## 0.6.0 (2026-10-11)
 
 - Seek strip in the control bar: click or drag to go back within what mpv has buffered (up to about 3.5 minutes at
