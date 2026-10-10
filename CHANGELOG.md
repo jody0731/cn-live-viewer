@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0 (2026-10-11)
+
+- Seek strip in the control bar: click or drag to go back within what mpv has buffered (up to about 3.5 minutes at
+  20 Mbps: the rewind buffer is now 512 MiB). A LIVE badge shows how far behind you are; click it to catch up.
+- A ☰ button opens mpv's own menu: key bindings, stream info, statistics, help.
+- The control bar hides 0.5 s after the mouse stops (was 1.5 s).
+
 ## 0.5.0 (2026-10-11)
 
 - Mouse controls. A slim control bar for live streams replaces mpv's own: play/pause, the room name (click it for

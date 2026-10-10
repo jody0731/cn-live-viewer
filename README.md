@@ -89,9 +89,13 @@ Keys in the player:
 All of mpv's usual keys work too.
 
 With the mouse:
-- **Control bar:** moving the mouse shows a slim bar at the bottom, in place of mpv's own. It has play/pause, the
-  room name (click it for the room list), the chat overlay, volume (click to mute, scroll to change) and
-  fullscreen. Hover a button to see what it does.
+- **Control bar:** moving the mouse shows a slim bar at the bottom, in place of mpv's own. It hides 0.5 s after
+  the mouse stops. Hover anything to see what it does.
+  - **Seek strip:** spans the part of the stream mpv has buffered. Click or drag to go back; the right end is live.
+  - **Left:** mpv's menu ☰ (key bindings, stream info, statistics, help), play/pause, and the LIVE badge. When
+    you're behind, the badge shows how far (e.g. −0:42); click it to catch up. Then the room name: click it for the
+    room list.
+  - **Right:** the chat overlay, volume (click to mute, scroll to change) and fullscreen.
 - **Right-click menu:** Rooms (click one to switch), Chat overlay, Fullscreen and Quit. Right-click never pauses in
   cn-live-viewer's window.
 
@@ -128,9 +132,12 @@ cn-live-viewer starts its own mpv with these options:
 
 ```
 --profile=high-quality --hwdec=auto-safe --video-sync=display-resample --interpolation --tscale=oversample --window-maximized=yes
+--demuxer-max-back-bytes=512MiB
 ```
 
-It also turns off mpv's own control bar (`--osc=no`) and draws its own. These options are passed on the command
+The last one keeps up to 512 MiB of watched video in memory, so you can go back about 3.5 minutes at 20 Mbps (longer
+at lower bitrates). The memory is only used as it fills; lower it with e.g. `--mpv-args="--demuxer-max-back-bytes=128MiB"`.
+cn-live-viewer also turns off mpv's own control bar (`--osc=no`) and draws its own. These options are passed on the command
 line, so they win over the same options in your `mpv.conf`. Everything else in
 your `mpv.conf` and `input.conf` still applies. Change them with `--mpv-args`, which comes last, for example:
 

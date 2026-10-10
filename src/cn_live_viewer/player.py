@@ -11,10 +11,11 @@ from .mpv import Mpv
 
 log = logging.getLogger(__name__)
 SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua', 'bar.lua')]
-# smooth 60 fps on high-refresh monitors, sharper upscaling, GPU decoding, a maximized (not fullscreen) window;
+# smooth 60 fps on high-refresh monitors, sharper upscaling, GPU decoding, a maximized (not fullscreen) window,
+# and a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills);
 # your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--profile=high-quality', '--hwdec=auto-safe', '--video-sync=display-resample',
-                    '--interpolation', '--tscale=oversample', '--window-maximized=yes']
+                    '--interpolation', '--tscale=oversample', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB']
 COLORS = ['\033[96m', '\033[93m', '\033[92m', '\033[95m', '\033[94m', '\033[91m']
 
 

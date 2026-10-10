@@ -256,3 +256,27 @@ nowhere else.
 **Test:** offline, on a test pattern with simulated mouse moves and clicks, every button did its job and the
 right-click menu showed the rooms and states. Then a short run on a live room in a 4K window confirmed the bar's
 scaling, the Chinese room name and the room entries in the menu.
+
+### Seek strip, LIVE badge, mpv's menu
+
+The control bar gained a seek strip.
+- **Range:** a live stream has no fixed length, so the strip spans mpv's buffer (the newest seekable range of
+  `demuxer-cache-state`), and its right end is the newest video received.
+- **Seeking:** clicking or dragging seeks within the buffer. mpv reports the stream as not seekable but still seeks
+  inside its cache. Before the change, a 10 s jump back worked at the default settings.
+- **Rewind buffer:** mpv's default back buffer (50 MiB) holds only about 20 s at 20 Mbps. cn-live-viewer now sets
+  `--demuxer-max-back-bytes=512MiB`, about 3.5 minutes at 20 Mbps.
+
+The LIVE badge shows how far playback is behind the newest video:
+- Within 10 s counts as live. mpv normally plays about 5–6 s behind what it has received.
+- Otherwise it shows e.g. −0:42, and clicking it jumps to 4 s behind the newest video.
+
+A ☰ button opens mpv's own menu (`select/menu`): key bindings, stream info, statistics, help.
+
+The bar now hides 0.5 s after the mouse stops.
+
+**Test:** on a live room with a 30 s buffer, clicking a quarter of the way along the strip put playback 22.5 s
+behind live. Clicking the badge brought it back to 7 s.
+
+**Simulated clicks:** they arrive as a single "press" event, not as separate down and up events. The bar handles
+both, so dragging works with a real mouse and clicks work from scripts.
