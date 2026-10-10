@@ -26,10 +26,10 @@ class RoomsTest(unittest.TestCase):
 
     def test_append_and_load(self):
         rooms.append(self.path, 'huya', '333003', 'First')
-        rooms.append(self.path, 'douyin', '123456789012')
+        rooms.append(self.path, 'douyin', '286658238204')
         self.assertEqual(rooms.load(self.path), [
             {'platform': 'huya', 'room': '333003', 'name': 'First'},
-            {'platform': 'douyin', 'room': '123456789012', 'name': 'douyin 123456789012'}])
+            {'platform': 'douyin', 'room': '286658238204', 'name': 'douyin 286658238204'}])
 
     def test_bad_lines_are_skipped(self):
         os.makedirs(os.path.dirname(self.path))

@@ -31,9 +31,9 @@ def chat(nick, text):
 
 class DouyinTest(unittest.TestCase):
     def test_room_id_from_number_or_link(self):
-        for arg in ('123456789012', 'https://live.douyin.com/123456789012', 'https://live.douyin.com/123456789012?a=1',
-                    'https://www.douyin.com/live/123456789012'):
-            self.assertEqual(douyin.room_id(arg), '123456789012', arg)
+        for arg in ('286658238204', 'https://live.douyin.com/286658238204', 'https://live.douyin.com/286658238204?a=1',
+                    'https://www.douyin.com/live/286658238204'):
+            self.assertEqual(douyin.room_id(arg), '286658238204', arg)
 
     def test_varints(self):
         for n in (0, 1, 127, 128, 300, 2**35):

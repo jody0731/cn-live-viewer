@@ -11,7 +11,7 @@ EXAMPLE = """\
 # The first room is the default when cn-live-viewer starts without a room. In the player, R opens this list.
 # Examples:
 #   huya     333003           Some Huya room
-#   douyin   123456789012     Some Douyin room
+#   douyin   286658238204     Some Douyin room
 """
 
 

@@ -8,7 +8,7 @@ Watch [Huya](https://www.huya.com) and [Douyin](https://live.douyin.com) live ro
 
 ```
 cn-live-viewer 333003
-cn-live-viewer https://live.douyin.com/123456789012
+cn-live-viewer https://live.douyin.com/286658238204
 ```
 
 ## Features
@@ -94,7 +94,7 @@ All of mpv's usual keys work too.
 ```
 # platform  room            name
 huya        333003          A Huya room
-douyin      123456789012    A Douyin room
+douyin      286658238204    A Douyin room
 ```
 
 - The first line is the default room.
