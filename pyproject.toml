@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cn-live-viewer"
+dynamic = ["version"]
+description = "Watch Huya and Douyin live rooms in mpv: no ads, the highest bitrate, scrolling chat, rooms switchable in the player"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jody" }]
+requires-python = ">=3.10"
+dependencies = [
+    "streamlink>=7",
+    "websockets>=15",
+]
+keywords = ["huya", "douyin", "live", "danmaku", "mpv", "streamlink"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Display",
+]
+
+[project.urls]
+Homepage = "https://github.com/jody0731/cn-live-viewer"
+Issues = "https://github.com/jody0731/cn-live-viewer/issues"
+
+[project.scripts]
+cn-live-viewer = "cn_live_viewer.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "cn_live_viewer.__version__" }
+
+[tool.setuptools.package-data]
+cn_live_viewer = ["mpv/*.lua"]
