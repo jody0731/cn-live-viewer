@@ -8,7 +8,7 @@ PLATFORMS = ('huya', 'douyin')
 EXAMPLE = """\
 # cn-live-viewer rooms: one per line as  platform  room  name
 # platform is huya or douyin; room is the number in the room's address; the name is free text.
-# The first room is the default when cn-live-viewer starts without a room. In the player, R opens this list,
+# The first room is the default when cn-live-viewer starts without a room. In the player, Tab opens this list,
 # where rooms can also be added, saved, renamed and removed.
 # Examples:
 #   huya     333003           Some Huya room

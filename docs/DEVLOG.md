@@ -211,3 +211,7 @@ now open 0.1 s later.
 **Test:** an end-to-end run in an empty home directory, driving the menu with simulated key presses. Save, remove,
 add by link (named after the streamer automatically), adding a duplicate (refused), rename and switch rooms all changed the
 room file and the player as expected.
+
+### Room list on Tab
+
+The room list moved from R to Tab. mpv's default key bindings don't use Tab.

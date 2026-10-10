@@ -1,4 +1,4 @@
--- Room picker for cn-live-viewer. R opens the saved rooms; Enter switches to one. The entries after the rooms
+-- Room picker for cn-live-viewer. Tab opens the saved rooms; Enter switches to one. The entries after the rooms
 -- add a room by number or link, save the room you're watching, or rename or remove a saved room.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
 local utils = require "mp.utils"
@@ -67,7 +67,7 @@ local actions = {
     end },
 }
 
-mp.add_key_binding("r", "cnlv-picker", function()
+mp.add_key_binding("TAB", "cnlv-picker", function()
     if not has_input or not input.select then
         mp.osd_message("The room list needs mpv 0.39 or newer", 3)
         return

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0 (2026-10-11)
+
+- The room list opens with Tab instead of R.
+
 ## 0.2.0 (2026-10-11)
 
 - Add, rename and remove rooms in the player's room list (R). Adding takes a room number or link.
