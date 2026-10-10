@@ -3,8 +3,8 @@
 ## 0.2.0 (2026-10-11)
 
 - Add, rename and remove rooms in the player's room list (R). Adding takes a room number or link.
-- Rooms you add or save are named after the streamer, and the window title shows the streamer's name.
-- Smoother chat overlay: text moves on every display refresh again (default `max_fps` 240).
+- Rooms you add or save are named after the streamer. A room that isn't saved shows the streamer's name as the
+  window title.
 
 ## 0.1.0 (2026-10-10)
 
