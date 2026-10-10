@@ -55,14 +55,23 @@ class Session:
         return rooms[0]
 
 
+def owner_name(room: dict):
+    return (room.get('owner') or {}).get('nickname') or None
+
+
+def streamer_name(rid: str):
+    """The streamer's name, live or not. Raises LookupError for an unknown room."""
+    return owner_name(Session(rid).room())
+
+
 def stream_url(rid: str, quality: str = 'origin'):
-    """-> (FLV url, internal room id). Raises LookupError when the room is not live."""
+    """-> (FLV url, internal room id, streamer name or None). Raises LookupError when the room is not live."""
     room = Session(rid).room()
     if room.get('status') != 2:
         raise LookupError(f'Douyin room {rid} is not live')
     data = json.loads(room['stream_url']['live_core_sdk_data']['pull_data']['stream_data'])['data']
     q = quality if quality in data else ('origin' if 'origin' in data else next(iter(data)))
-    return data[q]['main']['flv'], room['id_str']
+    return data[q]['main']['flv'], room['id_str'], owner_name(room)
 
 
 def parse_fetch(data: bytes):

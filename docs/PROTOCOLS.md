@@ -40,6 +40,11 @@ Text chat is uri **1400**, `MessageNotice`:
 
 Gifts, entry notices and everything else use other uris and are skipped.
 
+### Streamer name
+
+When a room is live, Streamlink reports the streamer's name. For adding a room, which may be offline, the mobile
+room page `https://m.huya.com/<room>` has it as `"sNick"`, next to the streamer's id (`"lPresenterUid"`).
+
 ### TARS in brief
 
 Each field is a head byte followed by its value.
@@ -78,6 +83,8 @@ From `data.data[0]`:
 
 `origin` is the streamer's own upload. mpv must send `Referer: https://live.douyin.com/`.
 
+`owner.nickname` is the streamer's name, given whether the room is live or not.
+
 ### Chat
 
 Douyin's websocket feed needs a signed request. The polling endpoint does not, so cn-live-viewer polls it:
@@ -110,7 +117,10 @@ talk through `script-message`:
 |---|---|---|
 | `cnlv-danmaku <text>` | controller → danmaku.lua | add one chat message to the overlay |
 | `cnlv-danmaku-clear` | controller → danmaku.lua | clear the overlay (on room switch) |
-| `cnlv-rooms <json>` | controller → picker.lua | the room list, with the current room marked |
+| `cnlv-rooms <json>` | controller → picker.lua | `{"playing": bool, "rooms": [...]}`, the current room marked |
 | `cnlv-ready` | picker.lua → controller | the script has loaded; send the room list |
-| `cnlv-switch <n>` | picker.lua → controller | switch to room *n* (1-based) |
+| `cnlv-switch <platform> <room>` | picker.lua → controller | play that room |
 | `cnlv-save` | picker.lua → controller | save the current room to the list |
+| `cnlv-add <text>` | picker.lua → controller | look up a room number or link and add it |
+| `cnlv-rename <platform> <room> <name>` | picker.lua → controller | rename a saved room |
+| `cnlv-remove <platform> <room>` | picker.lua → controller | remove a saved room |

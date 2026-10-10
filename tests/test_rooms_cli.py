@@ -31,6 +31,16 @@ class RoomsTest(unittest.TestCase):
             {'platform': 'huya', 'room': '333003', 'name': 'First'},
             {'platform': 'douyin', 'room': '286658238204', 'name': 'douyin 286658238204'}])
 
+    def test_rename_and_remove_keep_comments_and_order(self):
+        rooms.ensure(self.path)
+        for room, name in (('1', 'One'), ('2', 'Two'), ('3', 'Three')):
+            rooms.append(self.path, 'huya', room, name)
+        rooms.rename(self.path, 'huya', '2', '  New\nname ')
+        rooms.remove(self.path, 'huya', '1')
+        self.assertEqual([(r['room'], r['name']) for r in rooms.load(self.path)], [('2', 'New name'), ('3', 'Three')])
+        with open(self.path, encoding='utf-8') as f:
+            self.assertTrue(f.read().startswith(rooms.EXAMPLE))
+
     def test_bad_lines_are_skipped(self):
         os.makedirs(os.path.dirname(self.path))
         with open(self.path, 'w', encoding='utf-8') as f:

@@ -191,3 +191,23 @@ So the whole-pixel positions were what fixed the stutter, and the lower redraw r
 
 In both runs the player's regular overlay was also drawing real chat. In the round 2 run that overlay was still the
 old version, which explains most of the CPU difference.
+
+## 2026-10-11
+
+### Managing rooms in the player
+
+The room list (R) can now add, rename and remove rooms as well as save the current one.
+- **Menu:** these are entries after the rooms in the same menu. Adding and renaming open mpv's text prompt
+  (`mp.input.get`).
+- **Names:** rooms you add or save are named after the streamer, because Chinese names are awkward to type into
+  mpv. Douyin's room data has the name. Huya's mobile room page has it even when the room is offline.
+- **Lookups:** adding a room looks it up first, so an unknown room is refused.
+- **Room file:** renaming and removing rewrite only that room's line, so comments and order stay.
+
+**One snag:** opening a second prompt from inside the first prompt's Enter handler silently failed. mp.input sends
+the first prompt's "closed" event after Enter, and that event removed the new prompt's callbacks. Follow-up prompts
+now open 0.1 s later.
+
+**Test:** an end-to-end run in an empty home directory, driving the menu with simulated key presses. Save, remove,
+add by link (named after the streamer automatically), adding a duplicate (refused), rename and switch rooms all changed the
+room file and the player as expected.

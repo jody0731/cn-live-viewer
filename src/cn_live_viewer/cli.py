@@ -16,7 +16,8 @@ cn-live-viewer url  ROOM               print the stream address (for another pla
 cn-live-viewer rooms                   list saved rooms and where the list is
 
 ROOM is a Huya or Douyin room number or link. Bare numbers are Huya rooms unless saved as Douyin.
-In mpv:  R room list (Enter switches, first entry saves the current room)   C chat overlay on/off
+In mpv:  R room list: Enter switches; the entries after the rooms add, save, rename or remove rooms
+         C chat overlay on/off
 """
 
 
@@ -60,9 +61,9 @@ def main(argv=None):
     try:
         if cmd == 'url':
             if platform == 'huya':
-                url, _ = huya.stream_url(room, int(a.quality) if (a.quality or '').isdigit() else huya.DEFAULT_RATIO)
+                url = huya.stream_url(room, int(a.quality) if (a.quality or '').isdigit() else huya.DEFAULT_RATIO)[0]
             else:
-                url, _ = douyin.stream_url(room, a.quality or 'origin')
+                url = douyin.stream_url(room, a.quality or 'origin')[0]
             print(url)
             return 0
         if cmd == 'chat':

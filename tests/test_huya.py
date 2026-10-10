@@ -24,6 +24,13 @@ class HuyaTest(unittest.TestCase):
                          1199561386374)
         self.assertIsNone(huya.uid_from_url('https://al.flv.huya.com/other.flv'))
 
+    def test_room_page(self):
+        page = '<script>var x = {"lPresenterUid":1199561386374,"sNick":"Some \\"nick\\" \\u4e00","x":1}</script>'
+        self.assertEqual(huya.parse_room_page(page), (1199561386374, 'Some "nick" \u4e00'))
+        self.assertEqual(huya.parse_room_page('{"lChannelId":5,"sNick":""}'), (5, None))
+        with self.assertRaises(LookupError):
+            huya.parse_room_page('<html>no room</html>')
+
     def test_register_frame(self):
         cmd = tars.decode(huya.register_frame(42))
         self.assertEqual(cmd[0], 16)

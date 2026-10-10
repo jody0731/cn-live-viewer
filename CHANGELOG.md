@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 (2026-10-11)
+
+- Add, rename and remove rooms in the player's room list (R). Adding takes a room number or link.
+- Rooms you add or save are named after the streamer, and the window title shows the streamer's name.
+- Smoother chat overlay: text moves on every display refresh again (default `max_fps` 240).
+
 ## 0.1.0 (2026-10-10)
 
 First release. Linux; macOS should work but is untested; Windows is not supported yet.

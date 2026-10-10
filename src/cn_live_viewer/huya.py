@@ -6,6 +6,7 @@ Chat: a websocket to wss://cdnws.api.huya.com speaking TARS; we register for the
 "chat:" groups and read MessageNotice (uri 1400) pushes. See docs/PROTOCOLS.md.
 """
 import asyncio
+import json
 import logging
 import re
 import ssl
@@ -41,30 +42,47 @@ def uid_from_url(url: str):
 
 
 def stream_url(room: str, ratio: int = DEFAULT_RATIO):
-    """-> (FLV url, presenter uid or None). Raises LookupError when the room is offline or unknown."""
+    """-> (FLV url, presenter uid or None, streamer name or None). Raises LookupError when the room is offline or unknown."""
     from streamlink import Streamlink
-    streams = Streamlink().streams(f'https://www.huya.com/{room}')
+    session = Streamlink()
+    _, plugin_class, page = session.resolve_url(f'https://www.huya.com/{room}')
+    plugin = plugin_class(session, page)
+    streams = plugin.streams()
     s = streams.get('hs_source') or streams.get('best')
     if not s or not getattr(s, 'url', None):
         raise LookupError(f'Huya room {room} is offline or not found')
     url = with_ratio(s.url, ratio) if ratio else s.url
-    return url, uid_from_url(url)
+    return url, uid_from_url(url), plugin.get_author()
 
 
-def presenter_uid(room: str) -> int:
-    """The streamer's id from the mobile room page (only needed when stream_url() didn't give it)."""
+def parse_room_page(html: str):
+    """The mobile room page -> (presenter uid, streamer name or None). Raises LookupError when it shows no room."""
+    m = re.search(r'"lPresenterUid":(\d+)', html) or re.search(r'"lChannelId":(\d+)', html)
+    if not m:
+        raise LookupError('no room on the page')
+    nick = re.search(r'"sNick":"((?:[^"\\]|\\.)*)"', html)
+    try:
+        name = json.loads(f'"{nick.group(1)}"') if nick else None
+    except ValueError:
+        name = None
+    return int(m.group(1)), (name or None)
+
+
+def room_info(room: str):
+    """-> (presenter uid, streamer name or None) from the mobile room page; works when the room is offline too."""
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     for attempt in range(5):
         try:
             req = urllib.request.Request(f'https://m.huya.com/{room}', headers={'User-Agent': UA})
             html = opener.open(req, timeout=10).read().decode('utf-8', 'replace')
-            m = re.search(r'"lPresenterUid":(\d+)', html) or re.search(r'"lChannelId":(\d+)', html)
-            if not m:
-                raise LookupError(f'Huya room {room} not found')
-            return int(m.group(1))
         except OSError as e:
             log.info('room lookup failed (%s), retrying', e.__class__.__name__)
             time.sleep(2 + 2 * attempt)
+            continue
+        try:
+            return parse_room_page(html)
+        except LookupError:
+            raise LookupError(f'Huya room {room} not found') from None
     raise LookupError(f'could not reach Huya to look up room {room}')
 
 
@@ -100,7 +118,7 @@ def parse_frame(data: bytes):
 
 async def chat(room: str, uid: int = None):
     """Async generator of (nick, text); reconnects forever."""
-    uid = uid or await asyncio.to_thread(presenter_uid, room)
+    uid = uid or (await asyncio.to_thread(room_info, room))[0]
     while True:
         try:
             async with websockets.connect(CHAT_WS, ssl=ssl.create_default_context(), user_agent_header=UA,
