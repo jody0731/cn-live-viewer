@@ -41,6 +41,17 @@ class RoomsTest(unittest.TestCase):
         with open(self.path, encoding='utf-8') as f:
             self.assertTrue(f.read().startswith(rooms.EXAMPLE))
 
+    def test_make_default_moves_the_room_above_the_others(self):
+        rooms.ensure(self.path)
+        for room in ('1', '2', '3'):
+            rooms.append(self.path, 'huya', room)
+        rooms.make_default(self.path, 'huya', '3')
+        self.assertEqual([r['room'] for r in rooms.load(self.path)], ['3', '1', '2'])
+        rooms.make_default(self.path, 'huya', '9')              # not saved: nothing changes
+        self.assertEqual([r['room'] for r in rooms.load(self.path)], ['3', '1', '2'])
+        with open(self.path, encoding='utf-8') as f:
+            self.assertTrue(f.read().startswith(rooms.EXAMPLE))
+
     def test_bad_lines_are_skipped(self):
         os.makedirs(os.path.dirname(self.path))
         with open(self.path, 'w', encoding='utf-8') as f:

@@ -56,21 +56,44 @@ def append(path: str, platform: str, room: str, name: str = None) -> None:
         f.write(line(platform, room, name))
 
 
+def _is_room(text: str, platform: str = None, room: str = None) -> bool:
+    if not text.strip() or text.lstrip().startswith('#'):
+        return False
+    return platform is None or text.split(None, 2)[:2] == [platform, room]
+
+
+def _write(path: str, lines: list) -> None:
+    tmp = f'{path}.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.writelines(lines)
+    os.replace(tmp, path)
+
+
 def _rewrite(path: str, platform: str, room: str, new_line: str = None) -> None:
     """Replace (or with new_line None, drop) the room's line; comments and the other lines stay as they are."""
     with open(path, encoding='utf-8') as f:
         lines = f.readlines()
     out = []
     for old in lines:
-        if not old.lstrip().startswith('#') and old.split(None, 2)[:2] == [platform, room]:
+        if _is_room(old, platform, room):
             if new_line:
                 out.append(new_line)
             continue
         out.append(old)
-    tmp = f'{path}.tmp'
-    with open(tmp, 'w', encoding='utf-8') as f:
-        f.writelines(out)
-    os.replace(tmp, path)
+    _write(path, out)
+
+
+def make_default(path: str, platform: str, room: str) -> None:
+    """Move the room's line above the other rooms: the first room is the one played on start."""
+    with open(path, encoding='utf-8') as f:
+        lines = f.readlines()
+    found = [old for old in lines if _is_room(old, platform, room)]
+    if not found:
+        return
+    rest = [old for old in lines if old is not found[0]]
+    first = next((i for i, old in enumerate(rest) if _is_room(old)), len(rest))
+    rest.insert(first, found[0] if found[0].endswith('\n') else found[0] + '\n')
+    _write(path, rest)
 
 
 def rename(path: str, platform: str, room: str, name: str) -> None:

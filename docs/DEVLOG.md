@@ -215,3 +215,17 @@ room file and the player as expected.
 ### Room list on Tab
 
 The room list moved from R to Tab. mpv's default key bindings don't use Tab.
+
+### Default room, clearer search box
+
+The text field at the top of the room list only filters the list, but its label "Room:" read like a place to enter
+a room. Every picker's field now says "Search", after a question saying what the list is for: "Search rooms:",
+"Remove which room?   Search:".
+
+The room list can now set the default room, the one played on start. This moves the room's line to the top of
+the room file, and the list marks it.
+
+A custom menu without the search field was tried and dropped: the field is useful for finding a room.
+
+Not fixed: mpv sizes this menu from the item with the most bytes, not the widest one, and measures it slightly
+short. The widest row can lose its last character, often the last digit of a Douyin room number.

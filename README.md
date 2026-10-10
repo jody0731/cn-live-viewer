@@ -17,7 +17,7 @@ cn-live-viewer https://live.douyin.com/286658238204
   streamer's original upload.
 - **Chat over the video**, scrolling right to left in the top half of the picture, and in the terminal.
 - **Room list inside the player.** Press Tab, pick a room, and video and chat switch in the same window. Add, save,
-  rename and remove rooms from the same menu; new rooms are named after the streamer.
+  rename and remove rooms, and set the default room, from the same menu; new rooms are named after the streamer.
 - **Reconnects** by itself when a stream drops.
 - **Smooth on high-refresh monitors:** 60 fps streams are resampled to the display, so motion doesn't judder at
   144/160/240 Hz.
@@ -80,7 +80,7 @@ Keys in the player:
 
 | Key | Action |
 |---|---|
-| Tab | Room list. Enter switches. The entries after the rooms add, save, rename and remove rooms. |
+| Tab | Room list. Enter switches; typing searches the list. The entries after the rooms add, save, rename and remove rooms and set the default room. |
 | C | Chat overlay on/off |
 | Space | Pause |
 | F | Fullscreen |
@@ -98,7 +98,8 @@ huya        333003          A Huya room
 douyin      286658238204    A Douyin room
 ```
 
-- The first line is the default room.
+- The first line is the default room, played when cn-live-viewer starts without a room. Change it in the player (Tab,
+  Set the default room).
 - The name is free text.
 - The room is the number in the room's address.
 - Rooms you add or save in the player are named after the streamer. Rename them in the player (Tab, Rename a room)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.0 (2026-10-11)
+
+- Set the default room (the one played on start) from the room list. The list marks it.
+- The room list's search box is labelled as one ("Search rooms:"), and the room pickers say what they are for,
+  such as "Remove which room?".
+
 ## 0.3.0 (2026-10-11)
 
 - The room list opens with Tab instead of R.

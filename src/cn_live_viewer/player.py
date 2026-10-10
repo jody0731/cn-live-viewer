@@ -150,6 +150,12 @@ class Player:
         if self.current == (platform, room):
             await self.mpv.command('set_property', 'force-media-title', self.name_of(platform, room))
 
+    async def make_default(self, platform: str, room: str):
+        if not self.saved(platform, room):
+            return
+        roomlist.make_default(self.rooms_path, platform, room)
+        await self.reload(f'Default room: {self.name_of(platform, room)}')
+
     async def remove(self, platform: str, room: str):
         if not self.saved(platform, room):
             return
@@ -170,6 +176,8 @@ class Player:
                     asyncio.create_task(self.add(args[0]))
                 elif msg == 'cnlv-rename' and len(args) == 3:
                     asyncio.create_task(self.rename(*args))
+                elif msg == 'cnlv-default' and len(args) == 2:
+                    asyncio.create_task(self.make_default(*args))
                 elif msg == 'cnlv-remove' and len(args) == 2:
                     asyncio.create_task(self.remove(*args))
                 elif msg == 'cnlv-ready':

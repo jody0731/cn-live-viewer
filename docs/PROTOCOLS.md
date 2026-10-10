@@ -124,3 +124,4 @@ talk through `script-message`:
 | `cnlv-add <text>` | picker.lua → controller | look up a room number or link and add it |
 | `cnlv-rename <platform> <room> <name>` | picker.lua → controller | rename a saved room |
 | `cnlv-remove <platform> <room>` | picker.lua → controller | remove a saved room |
+| `cnlv-default <platform> <room>` | picker.lua → controller | move a saved room to the top of the list, which makes it the default |

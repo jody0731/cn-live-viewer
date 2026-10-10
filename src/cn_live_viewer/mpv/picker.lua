@@ -1,5 +1,6 @@
 -- Room picker for cn-live-viewer. Tab opens the saved rooms; Enter switches to one. The entries after the rooms
--- add a room by number or link, save the room you're watching, or rename or remove a saved room.
+-- add a room by number or link, save the room you're watching, rename or remove a saved room, or set the default
+-- room (the first in the list, played on start). Typing filters the list.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
 local utils = require "mp.utils"
 local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 0.39 or newer
@@ -21,8 +22,9 @@ local function later(fn)
     mp.add_timeout(0.1, fn)
 end
 
-local function label(r)
-    return string.format("%s%s   ·   %s %s", r.current and "▶ " or "   ", r.name, r.platform, r.room)
+local function label(i, r)
+    return string.format("%s%s   ·   %s %s%s", r.current and "▶ " or "   ", r.name, r.platform, r.room,
+                         i == 1 and "   ·   default" or "")
 end
 
 -- choose a saved room, then fn(room)
@@ -32,7 +34,7 @@ local function choose(prompt, fn)
         return
     end
     local items = {}
-    for i, r in ipairs(rooms) do items[i] = label(r) end
+    for i, r in ipairs(rooms) do items[i] = label(i, r) end
     later(function()
         input.select({ prompt = prompt, items = items, submit = function(i) fn(rooms[i]) end })
     end)
@@ -58,12 +60,15 @@ local actions = {
     end },
     { "+  Save the current room", function() send("cnlv-save") end, unsaved_only = true },
     { "   Rename a room…", function()
-        choose("Rename:", function(r)
+        choose("Rename which room?   Search:", function(r)
             ask("New name:", r.name, function(text) send("cnlv-rename", r.platform, r.room, text) end)
         end)
     end },
+    { "★  Set the default room…", function()
+        choose("Play which room on start?   Search:", function(r) send("cnlv-default", r.platform, r.room) end)
+    end, min_rooms = 2 },
     { "-  Remove a room…", function()
-        choose("Remove:", function(r) send("cnlv-remove", r.platform, r.room) end)
+        choose("Remove which room?   Search:", function(r) send("cnlv-remove", r.platform, r.room) end)
     end },
 }
 
@@ -73,19 +78,19 @@ mp.add_key_binding("TAB", "cnlv-picker", function()
         return
     end
     local items, handlers, default, saved = {}, {}, nil, false
-    for _, r in ipairs(rooms) do
-        items[#items + 1] = label(r)
+    for i, r in ipairs(rooms) do
+        items[#items + 1] = label(i, r)
         handlers[#handlers + 1] = function() send("cnlv-switch", r.platform, r.room) end
         if r.current then default, saved = #items, true end
     end
     for _, a in ipairs(actions) do
-        if not (a.unsaved_only and (saved or not playing)) then
+        if not (a.unsaved_only and (saved or not playing)) and #rooms >= (a.min_rooms or 0) then
             items[#items + 1] = a[1]
             handlers[#handlers + 1] = a[2]
         end
     end
     input.select({
-        prompt = "Room:",
+        prompt = "Search rooms:",
         items = items,
         default_item = default or 1,
         submit = function(i) handlers[i]() end,
