@@ -5,3 +5,5 @@ build/
 dist/
 .venv/
 venv/
+# mpv screenshots (mpv saves them in the folder it was started from)
+mpv-shot*
