@@ -145,6 +145,13 @@ def start_order(rooms: list, recent: list, limit: int = 8) -> list:
     return order[:limit]
 
 
+def live_first(candidates: list, live: dict) -> list:
+    """The start order with rooms known to be live first, then unknown ones, then those that looked offline (still
+    tried last, in case the check was wrong). Each group keeps its order."""
+    rank = lambda c: {True: 0, None: 1, False: 2}[live.get(c)]
+    return sorted(candidates, key=rank)
+
+
 def parse_target(arg: str, rooms: list):
     """A room number or link -> (platform, room). Bare numbers are Huya unless saved as a Douyin room."""
     if 'douyin.com' in arg:

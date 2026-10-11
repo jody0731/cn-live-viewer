@@ -5,6 +5,7 @@ import math
 import os
 import re
 import sys
+import threading
 import time
 import zlib
 
@@ -59,6 +60,10 @@ class Player:
         self.auto = q.Auto()
         self.tiers, self.tier = [], None             # the current room's levels and the one playing
         self.stalled_since = None
+        self.live = {}                               # (platform, room) -> True/False: online markers in the room lists
+        self.live_checked = -math.inf
+        self.douyin_session, self.douyin_lock = None, threading.Lock()
+        self.waiting_task = None                     # waiting for an offline room to go live
         self.rooms = roomlist.load(rooms_path)
         self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + list(mpv_args or []))
         self.current = None
@@ -76,11 +81,49 @@ class Player:
                 return r['name']
         return self.names.get((platform, room)) or f'{platform} {room}'
 
+    # ---------------------------------------------------------------- online / offline
+
+    LIVE_EVERY, LIVE_REUSE = 300, 120                # refresh every 5 minutes; a room list opened reuses < 2 min
+
+    def _status(self, platform: str, room: str) -> str:
+        """One status check: 'live', 'offline' or 'missing' (a few KB for Huya, ~100 KB gzipped for Douyin).
+        Raises when it can't tell."""
+        if platform == 'huya':
+            return huya.status(room)
+        with self.douyin_lock:                       # one visitor session (cookie) for all Douyin checks
+            if self.douyin_session is None:
+                self.douyin_session = douyin.Session(room)
+        return douyin.status(room, self.douyin_session)
+
+    async def refresh_live(self, pairs=None, max_age: float = LIVE_REUSE):
+        """Check which rooms are live (the saved ones, or pairs), all at once, and update the room lists."""
+        now = time.monotonic()
+        if pairs is None:
+            if now - self.live_checked < max_age:
+                return
+            self.live_checked = now
+            pairs = [(r['platform'], r['room']) for r in self.rooms]
+        results = await asyncio.gather(*(asyncio.to_thread(self._status, *p) for p in pairs), return_exceptions=True)
+        for pair, result in zip(pairs, results):
+            if isinstance(result, str):
+                self.live[pair] = result == 'live'
+            else:
+                log.info('live check for %s %s failed: %s', *pair, result)
+        if self.current and self.tier:
+            self.live[self.current] = True           # it's playing
+        await self.send_rooms()
+
+    async def live_loop(self):
+        while True:
+            await asyncio.sleep(self.LIVE_EVERY)
+            await self.refresh_live(max_age=0)
+
     async def send_rooms(self):
         # a property, not a message: picker.lua reads it whenever it loads, so it can't miss the list (a message
         # sent before it loaded, or one it sent before we connected, was lost, and the room list stayed empty)
         data = {'playing': self.current is not None,
-                'rooms': [dict(r, current=(r['platform'], r['room']) == self.current) for r in self.rooms]}
+                'rooms': [dict(r, current=(r['platform'], r['room']) == self.current,
+                               live=self.live.get((r['platform'], r['room']))) for r in self.rooms]}
         await self.mpv.command('set_property', 'user-data/cnlv/rooms', data)
 
     async def _chat(self, gen):
@@ -95,8 +138,12 @@ class Player:
         except Exception as e:                       # chat is best effort; the video keeps playing
             log.warning('chat stopped: %s', e)
 
-    async def play(self, platform: str, room: str, quiet: bool = False, next_room=None) -> bool:
-        """Play a room. next_room: on start, the room tried next if this one isn't live (the message says so)."""
+    async def play(self, platform: str, room: str, quiet: bool = False, next_room=None, wait: bool = False) -> bool:
+        """Play a room. next_room: on start, the room tried next if this one isn't live (the message says so).
+        wait: if the room is offline, switch to it anyway and wait for it to go live (chosen rooms, added rooms)."""
+        if self.waiting_task and self.waiting_task is not asyncio.current_task():
+            self.waiting_task.cancel()               # a room we were waiting for: not any more
+        self.waiting_task = None
         self.switching = True
         name = self.name_of(platform, room)
         if not quiet:
@@ -105,6 +152,15 @@ class Player:
             tiers, referer, chat, streamer = await asyncio.to_thread(levels, platform, room)
             tier = q.pick(tiers, self.choice, self.auto.cap)
         except Exception as e:
+            if wait and isinstance(e, LookupError):
+                try:
+                    status = await asyncio.to_thread(self._status, platform, room)
+                except Exception:                    # noqa: BLE001 - can't tell: assume offline, keep waiting
+                    status = 'offline'
+                if status != 'missing':
+                    await self.wait_for(platform, room, name)
+                    self.switching = False
+                    return True
             hint = f'Trying {self.name_of(*next_room)} …' if next_room else 'Tab: choose another room'
             await self.mpv.show(f'✗ {e}\n{hint}', 3 if next_room else 6)
             print(f'-- {e}', file=sys.stderr, flush=True)
@@ -120,6 +176,7 @@ class Player:
         await self.mpv.command('set_property', 'force-media-title', name)
         await self.mpv.command('loadfile', tier.url, 'replace')
         self.current, self.tiers, self.tier = (platform, room), tiers, tier
+        self.live[(platform, room)] = True
         try:
             roomlist.remember(self.rooms_path, platform, room)
         except OSError:
@@ -131,6 +188,40 @@ class Player:
         await self.send_quality()
         self.switching = False
         return True
+
+    # ---------------------------------------------------------------- an offline room, waiting for it to go live
+
+    WAIT_EVERY = 30                                  # seconds between checks while waiting
+
+    async def wait_for(self, platform: str, room: str, name: str):
+        """Switch to an offline room: its chat runs, the video stops, and it plays by itself once it goes live."""
+        if self.chat_task:
+            self.chat_task.cancel()
+        await self.mpv.command('stop')               # the window stays (--idle)
+        await self.mpv.command('script-message', 'cnlv-danmaku-clear')
+        await self.mpv.command('set_property', 'force-media-title', name)
+        self.current, self.tiers, self.tier = (platform, room), [], None
+        self.live[(platform, room)] = False
+        print(f'======== {name} ({platform} {room}) · offline, waiting for the stream ========', flush=True)
+        chat = huya.chat(room) if platform == 'huya' else douyin.chat(room)   # they look the room up themselves
+        self.chat_task = asyncio.create_task(self._chat(chat))
+        await self.send_rooms()
+        await self.send_quality()
+        self.waiting_task = asyncio.create_task(self._wait_loop(platform, room, name))
+
+    async def _wait_loop(self, platform: str, room: str, name: str):
+        while self.current == (platform, room):
+            await self.mpv.show(f'○ {name} is offline\nWaiting for the stream · Tab: choose another room',
+                                self.WAIT_EVERY + 5)
+            await asyncio.sleep(self.WAIT_EVERY)
+            try:
+                status = await asyncio.to_thread(self._status, platform, room)
+            except Exception:                        # noqa: BLE001 - a failed check: try again next time
+                continue
+            if status == 'live' and self.current == (platform, room):
+                self.waiting_task = None             # play() would otherwise cancel this task, which is running it
+                await self.play(platform, room)
+                return
 
     # ---------------------------------------------------------------- quality
 
@@ -239,6 +330,7 @@ class Player:
             name = None
         roomlist.append(self.rooms_path, platform, room, name)
         await self.reload(f'Added: {name or f"{platform} {room}"}')
+        await self.play(platform, room, wait=True)  # switch to the new room (or wait for it, if it's offline)
 
     async def rename(self, platform: str, room: str, name: str):
         if not self.saved(platform, room) or not name.strip():
@@ -267,7 +359,7 @@ class Player:
             if name == 'client-message':
                 msg, args = (ev.get('args') or [''])[0], (ev.get('args') or [])[1:]
                 if msg == 'cnlv-switch' and len(args) == 2 and args[0] in roomlist.PLATFORMS:
-                    asyncio.create_task(self.play(*args))
+                    asyncio.create_task(self.play(*args, wait=True))
                 elif msg == 'cnlv-save':
                     asyncio.create_task(self.save_current())
                 elif msg == 'cnlv-add' and len(args) == 1:
@@ -280,6 +372,8 @@ class Player:
                     asyncio.create_task(self.remove(*args))
                 elif msg == 'cnlv-quality' and len(args) == 1:
                     asyncio.create_task(self.set_quality(args[0]))
+                elif msg == 'cnlv-refresh-live':
+                    asyncio.create_task(self.refresh_live())
             elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
                 asyncio.create_task(self.on_cache_pause(bool(ev.get('data'))))
             elif name == 'end-file' and ev.get('reason') in ('eof', 'error') and self.current and not self.switching:
@@ -293,17 +387,30 @@ class Player:
         events = asyncio.create_task(self._events())
         await self.mpv.command('observe_property', 1, 'paused-for-cache')
         stepping_up = asyncio.create_task(self.auto_up())
+        live_checks = asyncio.create_task(self.live_loop())
         try:
             await self.send_rooms()                  # before the first room, so the list is there even if it fails
+            if len(candidates) > 1:
+                # check them all at once (and the saved rooms, for the markers), then try live rooms first
+                saved = [(r['platform'], r['room']) for r in self.rooms]
+                try:
+                    await asyncio.wait_for(self.refresh_live(list(dict.fromkeys(candidates + saved))), 8)
+                    self.live_checked = time.monotonic()
+                except asyncio.TimeoutError:
+                    pass
+                candidates = roomlist.live_first(candidates, self.live)
             if not candidates:
                 await self.mpv.show('No rooms saved yet. Press Tab, then "Add a room…"', 30)
-            for i, (platform, room) in enumerate(candidates):
-                after = candidates[i + 1] if i + 1 < len(candidates) else None
-                if await self.play(platform, room, quiet=i > 0, next_room=after):
-                    break
+            if len(candidates) == 1:                 # a room asked for by name: play it, or wait for it
+                await self.play(*candidates[0], wait=True)
             else:
-                if len(candidates) > 1:
-                    await self.mpv.show('None of these rooms is live right now.\nTab: choose a room', 10)
+                for i, (platform, room) in enumerate(candidates):
+                    after = candidates[i + 1] if i + 1 < len(candidates) else None
+                    if await self.play(platform, room, quiet=i > 0, next_room=after):
+                        break
+                else:
+                    if candidates:                   # none is live: wait for the first (the default room)
+                        await self.play(*candidates[0], wait=True)
             await asyncio.wait([events, asyncio.create_task(self.mpv.proc.wait())],
                                return_when=asyncio.FIRST_COMPLETED)
         finally:
@@ -311,4 +418,5 @@ class Player:
                 self.chat_task.cancel()
             events.cancel()
             stepping_up.cancel()
+            live_checks.cancel()
             await self.mpv.close()

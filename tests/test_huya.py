@@ -24,12 +24,18 @@ class HuyaTest(unittest.TestCase):
                          1199561386374)
         self.assertIsNone(huya.uid_from_url('https://al.flv.huya.com/other.flv'))
 
-    def test_room_page(self):
-        page = '<script>var x = {"lPresenterUid":1199561386374,"sNick":"Some \\"nick\\" \\u4e00","x":1}</script>'
-        self.assertEqual(huya.parse_room_page(page), (1199561386374, 'Some "nick" \u4e00'))
-        self.assertEqual(huya.parse_room_page('{"lChannelId":5,"sNick":""}'), (5, None))
+    def test_owner_from_the_room_profile(self):
+        data = {'status': 200, 'data': {'liveStatus': 'OFF', 'profileInfo': {'uid': 2367547387, 'nick': 'Some nick'}}}
+        self.assertEqual(huya.parse_owner(data), (2367547387, 'Some nick'))       # offline rooms have it too
+        self.assertEqual(huya.parse_owner({'status': 200, 'data': {'profileInfo': {'uid': '5', 'nick': ''}}}), (5, None))
         with self.assertRaises(LookupError):
-            huya.parse_room_page('<html>no room</html>')
+            huya.parse_owner({'status': 422, 'message': 'no room'})
+
+    def test_live_status_from_the_room_profile(self):
+        self.assertEqual(huya.parse_profile({'status': 200, 'data': {'liveStatus': 'ON'}}), 'live')
+        self.assertEqual(huya.parse_profile({'status': 200, 'data': {'liveStatus': 'OFF'}}), 'offline')
+        self.assertEqual(huya.parse_profile({'status': 200, 'data': {'liveStatus': 'REPLAY'}}), 'offline')
+        self.assertEqual(huya.parse_profile({'status': 422, 'message': 'no room'}), 'missing')
 
     def test_register_frame(self):
         cmd = tars.decode(huya.register_frame(42))

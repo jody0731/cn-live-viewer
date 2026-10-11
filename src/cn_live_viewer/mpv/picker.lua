@@ -7,6 +7,15 @@ local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 
 
 local rooms, playing = {}, false
 
+-- a room's status, shown first: cn-live-viewer checks every few minutes (mpv's lists can't dim single items, so
+-- the status is in words)
+local function status(r)
+    if r.current then return r.live == false and "▶ Waiting" or "▶ Playing" end
+    if r.live == true then return "● Live" end
+    if r.live == false then return "○ Offline" end
+    return "·  Checking"
+end
+
 -- the quality submenu, from cn-live-viewer's user-data/cnlv/quality: Auto, then the room's levels, best first
 local function quality_items()
     local qd = mp.get_property_native("user-data/cnlv/quality") or {}
@@ -24,7 +33,8 @@ end
 local function update_menu()
     local room_items = {}
     for _, r in ipairs(rooms) do
-        room_items[#room_items + 1] = { title = r.name, state = r.current and { "checked" } or nil,
+        local title = r.live == nil and not r.current and r.name or (status(r) .. "  ·  " .. r.name)
+        room_items[#room_items + 1] = { title = title, state = r.current and { "checked" } or nil,
                                         cmd = string.format("script-message cnlv-switch %s %s", r.platform, r.room) }
     end
     if #room_items > 0 then room_items[#room_items + 1] = { type = "separator" } end
@@ -47,6 +57,8 @@ mp.observe_property("fullscreen", "bool", update_menu)
 
 -- right-click opens that menu in cn-live-viewer's window (it would otherwise pause, or do nothing)
 mp.add_forced_key_binding("MBTN_RIGHT", "cnlv-context-menu", function()
+    -- fresh online markers (cn-live-viewer reuses checks under 2 minutes old); send() is defined further down
+    mp.commandv("script-message", "cnlv-refresh-live")
     if mp.get_property_bool("load-context-menu") then
         mp.commandv("script-message-to", "context_menu", "open")   -- mpv's own drawn menu (Linux)
     else
@@ -72,7 +84,7 @@ local function later(fn)
 end
 
 local function label(i, r)
-    return string.format("%s%s   ·   %s %s%s", r.current and "▶ " or "   ", r.name, r.platform, r.room,
+    return string.format("%s   ·   %s   ·   %s %s%s", status(r), r.name, r.platform, r.room,
                          i == 1 and "   ·   default" or "")
 end
 
@@ -122,6 +134,7 @@ local actions = {
 }
 
 mp.add_key_binding("TAB", "cnlv-picker", function()
+    send("cnlv-refresh-live")
     if not has_input or not input.select then
         mp.osd_message("The room list needs mpv 0.39 or newer", 3)
         return

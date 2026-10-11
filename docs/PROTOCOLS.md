@@ -5,6 +5,12 @@ on 2026-10-10; the sites can change it at any time. No login is used anywhere.
 
 ## Huya
 
+### Live or offline
+
+`GET https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=<room>` returns a few KB of JSON:
+- `data.liveStatus` is `ON` when the room is live (`OFF` or `REPLAY` otherwise);
+- `status` is 422 for a room that doesn't exist.
+
 ### Stream address
 
 Streamlink's Huya plugin reads the room page and returns FLV addresses. cn-live-viewer takes `hs_source` (or `best`)
@@ -44,8 +50,9 @@ Gifts, entry notices and everything else use other uris and are skipped.
 
 ### Streamer name
 
-When a room is live, Streamlink reports the streamer's name. For adding a room, which may be offline, the mobile
-room page `https://m.huya.com/<room>` has it as `"sNick"`, next to the streamer's id (`"lPresenterUid"`).
+When a room is live, Streamlink reports the streamer's name. For anything else (adding a room, an offline
+room's chat) the room-profile API above has `data.profileInfo.uid` (the streamer's id, which the chat needs) and
+`profileInfo.nick`, whether the room is live or not.
 
 ### TARS in brief
 
@@ -86,7 +93,9 @@ From `data.data[0]`:
 `origin` is the streamer's own upload. Each quality's `main.sdk_params` is a JSON string that usually holds
 `vbitrate` and `resolution`; the quality menu shows them. mpv must send `Referer: https://live.douyin.com/`.
 
-`owner.nickname` is the streamer's name, given whether the room is live or not.
+`owner.nickname` is the streamer's name, given whether the room is live or not. For the live markers,
+cn-live-viewer reads `status` from this same request for each room, reusing one visitor cookie. With
+`Accept-Encoding: gzip` the reply is about 100 KB instead of 700 KB.
 
 ### Chat
 
@@ -127,12 +136,13 @@ talk through `script-message`:
 | `cnlv-remove <platform> <room>` | picker.lua → controller | remove a saved room |
 | `cnlv-default <platform> <room>` | picker.lua → controller | move a saved room to the top of the list, which makes it the default |
 | `cnlv-quality <auto or level id>` | picker.lua, bar.lua → controller | choose Auto or a fixed quality level |
+| `cnlv-refresh-live` | picker.lua → controller | a room list was opened: refresh the live markers if older than 2 minutes |
 
 The three scripts:
 - **danmaku.lua** draws the chat. It publishes whether the overlay is on in the property `user-data/cnlv/chat`.
 - **picker.lua** handles the room list (Tab) and fills mpv's right-click menu (`menu-data`).
   It reads the rooms from the property `user-data/cnlv/rooms`, which the controller keeps current:
-  `{"playing": bool, "rooms": [...]}` with the current room marked. A property rather than a message,
+  `{"playing": bool, "rooms": [...]}` with the current room marked and `live` (true, false or null). A property rather than a message,
   so the list is there whenever the script loads.
 - **bar.lua** is the control bar. Its buttons call the other two through `script-binding picker/cnlv-picker` and
   `script-binding danmaku/cnlv-toggle-danmaku`.

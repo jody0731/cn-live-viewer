@@ -456,3 +456,44 @@ time it plays, so pipx installs get it too. A `launcher` marker file next to `ro
   change only reaches new sessions.
 
 Both scripts run on their own (`curl … | sh`, `irm … | iex`) and install from GitHub's zip, so git isn't needed.
+
+### Live / offline markers
+
+The room lists (Tab and right-click → Rooms) mark who is live: ● live, ○ offline, ▶ playing.
+
+**Is it a lot of overhead?** Not if the checks aren't real-time. Each check is one request per room:
+- **Huya:** the room-profile API (`mp.huya.com ... profileRoom`), 1.6–11 KB.
+- **Douyin:** the same room-data request the player already uses, about 100 KB once it is asked for gzip. Unpacked
+  it is about 750 KB, so all Douyin requests now ask for gzip. One visitor cookie serves all checks.
+
+**When it checks:**
+- every saved room, all at once, at start;
+- every 5 minutes;
+- when a room list opens, reusing results under 2 minutes old.
+
+With 4 rooms that is a few MB an hour against about 9 GB an hour of video.
+
+**Faster start:** the start order now tries live rooms first, then unknown ones, then rooms that looked offline,
+still tried last in case a check was wrong.
+
+**Limit:** mpv's menus can't change while open, so a refresh shows the next time a list is opened.
+
+**Follow-up (Jody):**
+- **Status position:** the status goes at the front, in words: "● Live · Gus", "○ Offline · …".
+- **Dimming:** not possible. mpv's Tab list escapes every item, so there are no per-item colours. The right-click
+  menu can only grey an item out by disabling it, and offline rooms should stay switchable.
+- **Switching to an offline room:** cn-live-viewer goes there and waits for the stream:
+  - the video stops and the room's chat runs;
+  - the room is checked every 30 s, and plays once it is live;
+  - a room that doesn't exist (`missing`) still fails, so the status checks return live, offline or missing.
+- **On start:** with no room live, cn-live-viewer waits for the default room.
+- **Added rooms:** a room you add is switched to straight away.
+
+**A Lua trap, twice in one day:** a `local function` is only visible below its definition. A call from code above it
+reaches a nil global, at runtime and only when that path runs. A unit test (`tests/test_lua_scripts.py`) now
+scans the mpv scripts for use-before-define.
+
+**Found in the pre-push run:** switching to the offline Huya room logged "chat stopped: Huya room 333003 not found".
+The mobile room page, where the streamer's id came from, doesn't have it while the room is offline. That also
+meant an offline Huya room couldn't be added at all. The room-profile API, already used for the live markers, has
+the id and the name either way, so `huya.room_info` uses it now and the page scraping is gone.

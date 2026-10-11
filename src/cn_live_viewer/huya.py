@@ -65,35 +65,53 @@ def streams(room: str):
     return tiers, uid_from_url(s.url), plugin.get_author()
 
 
-def parse_room_page(html: str):
-    """The mobile room page -> (presenter uid, streamer name or None). Raises LookupError when it shows no room."""
-    m = re.search(r'"lPresenterUid":(\d+)', html) or re.search(r'"lChannelId":(\d+)', html)
-    if not m:
-        raise LookupError('no room on the page')
-    nick = re.search(r'"sNick":"((?:[^"\\]|\\.)*)"', html)
-    try:
-        name = json.loads(f'"{nick.group(1)}"') if nick else None
-    except ValueError:
-        name = None
-    return int(m.group(1)), (name or None)
+def profile(room: str, tries: int = 1) -> dict:
+    """Huya's room-profile API: a few KB of JSON with the live status, the streamer's id and name. It works
+    whether the room is live or not."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for attempt in range(tries):
+        try:
+            req = urllib.request.Request(f'https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid={room}',
+                                         headers={'User-Agent': UA})
+            with opener.open(req, timeout=8) as r:
+                return json.loads(r.read())
+        except OSError as e:
+            if attempt == tries - 1:
+                raise
+            log.info('room lookup failed (%s), retrying', e.__class__.__name__)
+            time.sleep(2 + 2 * attempt)
+
+
+def parse_profile(data: dict) -> str:
+    """The profile -> 'live' (liveStatus ON), 'offline' (OFF, REPLAY) or 'missing' (no such room)."""
+    if data.get('status') != 200:
+        return 'missing'
+    return 'live' if (data.get('data') or {}).get('liveStatus') == 'ON' else 'offline'
+
+
+def parse_owner(data: dict):
+    """The profile -> (presenter uid, streamer name or None). Raises LookupError for no such room."""
+    info = (data.get('data') or {}).get('profileInfo') or {} if data.get('status') == 200 else {}
+    if not str(info.get('uid') or '').isdigit():
+        raise LookupError('no such room')
+    return int(info['uid']), (info.get('nick') or None)
+
+
+def status(room: str) -> str:
+    """'live', 'offline' or 'missing'. Raises OSError/ValueError when it can't tell."""
+    return parse_profile(profile(room))
 
 
 def room_info(room: str):
-    """-> (presenter uid, streamer name or None) from the mobile room page; works when the room is offline too."""
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    for attempt in range(5):
-        try:
-            req = urllib.request.Request(f'https://m.huya.com/{room}', headers={'User-Agent': UA})
-            html = opener.open(req, timeout=10).read().decode('utf-8', 'replace')
-        except OSError as e:
-            log.info('room lookup failed (%s), retrying', e.__class__.__name__)
-            time.sleep(2 + 2 * attempt)
-            continue
-        try:
-            return parse_room_page(html)
-        except LookupError:
-            raise LookupError(f'Huya room {room} not found') from None
-    raise LookupError(f'could not reach Huya to look up room {room}')
+    """-> (presenter uid, streamer name or None), live or not. Raises LookupError for an unknown room."""
+    try:
+        data = profile(room, tries=4)
+    except (OSError, ValueError):
+        raise LookupError(f'could not reach Huya to look up room {room}') from None
+    try:
+        return parse_owner(data)
+    except LookupError:
+        raise LookupError(f'Huya room {room} not found') from None
 
 
 def register_frame(uid: int) -> bytes:

@@ -38,7 +38,8 @@ class MpvSmokeTest(unittest.TestCase):
                 mpv = Mpv(player.SCRIPTS, ['--vo=null', '--ao=null', f'--log-file={log}'])
                 await mpv.start()
                 try:
-                    rooms = {'playing': False, 'rooms': [{'platform': 'huya', 'room': '1', 'name': 'One'}]}
+                    rooms = {'playing': False, 'rooms': [{'platform': 'huya', 'room': '1', 'name': 'One'},
+                                                         {'platform': 'huya', 'room': '2', 'name': 'Two', 'live': False}]}
                     await mpv.command('set_property', 'user-data/cnlv/rooms', rooms)
                     levels = {'auto': True, 'current': '20000', 'label': '20 Mbps',
                               'tiers': [{'id': '20000', 'label': '20 Mbps'}, {'id': '2000', 'label': '2 Mbps'}]}
@@ -53,7 +54,7 @@ class MpvSmokeTest(unittest.TestCase):
             self.assertIs(chat, True)                                   # danmaku.lua runs
             if menu is not None:                                        # older mpv has no right-click menu
                 self.assertEqual(menu[0]['title'], 'Rooms')             # picker.lua runs and read the room list
-                self.assertEqual(menu[0]['submenu'][0]['title'], 'One')
+                self.assertEqual([i.get('title') for i in menu[0]['submenu'][:2]], ['One', '○ Offline  ·  Two'])
                 self.assertEqual(menu[1]['title'], 'Quality')
                 self.assertEqual([i.get('title') for i in menu[1]['submenu']], ['Auto (now 20 Mbps)', None, '20 Mbps', '2 Mbps'])
             with open(log, encoding='utf-8', errors='replace') as f:

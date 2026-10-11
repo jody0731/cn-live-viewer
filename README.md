@@ -148,6 +148,14 @@ douyin      286658238204    A Douyin room
   Set the default room).
 - On start, if the default room is offline, cn-live-viewer tries the rooms you watched lately, newest first,
   then the rest of the list, and plays the first one that's live.
+- The room lists start each room with its status: ● Live, ○ Offline, ▶ Playing (or ▶ Waiting).
+  - **Checks:** all saved rooms at once when cn-live-viewer starts, every 5 minutes, and when you open a room list,
+    reusing results under 2 minutes old. Each check is one small request per room: a few MB an hour for a handful
+    of rooms, against about 9 GB an hour of video.
+  - **Open lists:** a list that is already open doesn't update until you open it again.
+- **Offline rooms:** you can switch to one. Its chat runs, and the video starts by itself when it goes live
+  (checked every 30 s).
+- **Added rooms:** a room you add is switched to straight away, or waited for if it's offline.
 - The name is free text.
 - The room is the number in the room's address.
 - Rooms you add or save in the player are named after the streamer. Rename them in the player (Tab, Rename a room)

@@ -73,6 +73,11 @@ class RoomsTest(unittest.TestCase):
                          [('huya', 'A'), ('douyin', 'X'), ('huya', 'C'), ('huya', 'B')])
         self.assertEqual(rooms.start_order([], []), [])
 
+    def test_live_first_keeps_offline_rooms_last(self):
+        order = [('huya', 'A'), ('douyin', 'X'), ('huya', 'C'), ('huya', 'B')]
+        live = {('huya', 'A'): False, ('huya', 'C'): True}
+        self.assertEqual(rooms.live_first(order, live), [('huya', 'C'), ('douyin', 'X'), ('huya', 'B'), ('huya', 'A')])
+
     def test_parse_target(self):
         saved = [{'platform': 'douyin', 'room': '555', 'name': 'x'}]
         self.assertEqual(rooms.parse_target('333003', saved), ('huya', '333003'))

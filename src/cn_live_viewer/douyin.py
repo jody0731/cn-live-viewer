@@ -5,6 +5,7 @@ original upload. Chat: the polling endpoint /webcast/im/fetch returns protobuf w
 no request signature (the websocket feed does). See docs/PROTOCOLS.md.
 """
 import asyncio
+import gzip
 import http.cookiejar
 import json
 import logging
@@ -40,22 +41,37 @@ class Session:
                                                   urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         self.get(f'https://live.douyin.com/{rid}')
 
-    def get(self, url: str, tries: int = 4) -> bytes:
+    def get(self, url: str, tries: int = 4, rid: str = None) -> bytes:
+        """GET with retries, gzip (the room data is ~7x smaller packed) and the room's page as referer."""
         for attempt in range(tries):
             try:
-                req = urllib.request.Request(url, headers={'User-Agent': UA, 'Referer': f'https://live.douyin.com/{self.rid}'})
-                return self.opener.open(req, timeout=12).read()
+                req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept-Encoding': 'gzip',
+                                                           'Referer': f'https://live.douyin.com/{rid or self.rid}'})
+                with self.opener.open(req, timeout=12) as r:
+                    body = r.read()
+                    return gzip.decompress(body) if r.headers.get('Content-Encoding') == 'gzip' else body
             except OSError:
                 if attempt == tries - 1:
                     raise
                 time.sleep(1.5 * (attempt + 1))
 
-    def room(self) -> dict:
-        d = json.loads(self.get(f'https://live.douyin.com/webcast/room/web/enter/?{COMMON}&enter_from=web_live&web_rid={self.rid}'))
+    def room(self, rid: str = None) -> dict:
+        """The room's data: this session's room, or another one (the visitor cookie works for any room)."""
+        rid = rid or self.rid
+        d = json.loads(self.get(f'https://live.douyin.com/webcast/room/web/enter/?{COMMON}&enter_from=web_live&web_rid={rid}',
+                                rid=rid))
         rooms = (d.get('data') or {}).get('data') or []
         if not rooms:
-            raise LookupError(f'Douyin room {self.rid} not found')
+            raise LookupError(f'Douyin room {rid} not found')
         return rooms[0]
+
+
+def status(rid: str, session: 'Session') -> str:
+    """'live' (status 2), 'offline' or 'missing', with an existing session. Raises OSError/ValueError when unknown."""
+    try:
+        return 'live' if session.room(rid).get('status') == 2 else 'offline'
+    except LookupError:
+        return 'missing'
 
 
 def owner_name(room: dict):

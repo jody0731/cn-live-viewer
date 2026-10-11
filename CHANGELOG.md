@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.0 (2026-10-11)
+
+- The room lists start each room with its status: ● Live, ○ Offline, ▶ Playing / ▶ Waiting. All saved rooms are
+  checked at start, every 5 minutes and when a room list opens, with one small request per room. On start, live
+  rooms are tried first.
+- Switching to an offline room waits for it: its chat runs and the video starts by itself when it goes live.
+- A room you add is switched to straight away.
+- Fixed: an offline Huya room couldn't be added ("not found") and its chat didn't start. Huya rooms are now looked
+  up through the room-profile API, which works offline, instead of the mobile room page.
+- Douyin requests ask for gzip: the room data is about 7x smaller.
+
 ## 0.9.0 (2026-10-11)
 
 - On start, an offline default room falls back to the rooms watched lately (newest first), then the rest of the
