@@ -16,10 +16,10 @@ require("mp.options").read_options(options, "cnlv-danmaku")
 local PLATFORM_FONTS = { linux = "Noto Sans CJK SC", darwin = "PingFang SC", windows = "Microsoft YaHei" }
 local FONT = options.font ~= "" and options.font or PLATFORM_FONTS[mp.get_property("platform", "")] or "sans-serif"
 
--- sizes for a 1080-pixel-high window; they scale with the window
+-- sizes for a 1920x1080 window; they scale to fit the window (by its width or height, whichever is smaller)
 local BASE_H = 1080
 local FONT_SIZE = 32
-local LANES = 14                        -- rows used, from the top (about the upper half of the picture)
+local LANES = 14                        -- rows at most, from the top of the picture (about its upper half)
 local LANE_H = 38
 local TOP = 14
 local DURATION = 9                      -- seconds to cross the screen
@@ -28,11 +28,20 @@ local enabled = true
 local items = {}                        -- {text, t0, lane, w, speed}; w and speed in 1080-high units
 local lane_free_at = {}                 -- per lane: time the previous message's tail has entered the screen
 local overlay = mp.create_osd_overlay("ass-events")
-local W, H, k = 1920, 1080, 1           -- overlay size in screen pixels, and its scale against 1080
+local W, H, k = 1920, 1080, 1           -- overlay size in screen pixels, and its scale against 1920x1080
+local top, lanes = 0, LANES             -- the picture's top edge (below any black bar) and the rows that fit
 local timer
 
 local function resize(_, d)
-    if d and d.w and d.h and d.w > 0 and d.h > 0 then W, H, k = d.w, d.h, d.h / BASE_H end
+    if d and d.w and d.h and d.w > 0 and d.h > 0 then
+        W, H = d.w, d.h
+        k = math.min(W / 1920, H / BASE_H)         -- a tall or narrow window doesn't make the text huge
+        -- start at the picture, not the window: a 16:9 stream in a tall window has black bars above and below
+        local pic_h = H - (d.mt or 0) - (d.mb or 0)
+        if pic_h <= 0 then pic_h = H end
+        top = d.mt or 0
+        lanes = math.max(3, math.min(LANES, math.floor((pic_h / 2 - TOP * k) / (LANE_H * k))))
+    end
     overlay.res_x, overlay.res_y = W, H
 end
 mp.observe_property("osd-dimensions", "native", resize)
@@ -71,7 +80,7 @@ local function render()
         if x + it.w * k > 0 then
             keep[#keep + 1] = it
             out[#out + 1] = string.format("{\\pos(%d,%d)%s}%s",
-                                          x, math.floor((TOP + (it.lane - 1) * LANE_H) * k + 0.5), style, it.text)
+                                          x, math.floor(top + (TOP + (it.lane - 1) * LANE_H) * k + 0.5), style, it.text)
         end
     end
     items = keep
@@ -87,7 +96,7 @@ local function add(text)
     local now = mp.get_time()
     -- first lane whose previous message has fully entered the screen (plus a gap)
     local lane
-    for i = 1, LANES do
+    for i = 1, lanes do
         if (lane_free_at[i] or 0) <= now then lane = i; break end
     end
     if not lane then return end         -- screen full: drop rather than overlap

@@ -15,7 +15,7 @@ local ICONS = {
 local PLATFORM_FONTS = { linux = "Noto Sans CJK SC", darwin = "PingFang SC", windows = "Microsoft YaHei" }
 local FONT = PLATFORM_FONTS[mp.get_property("platform", "")] or "sans-serif"
 
--- sizes for a 1080-pixel-high window; they scale with the window
+-- sizes for a 1920x1080 window; they scale to fit the window (by its width or height, whichever is smaller)
 local SEEK_H, ROW_H, PAD, ICON, TEXT, TIP = 22, 43, 18, 27, 22, 22   -- TIP: tooltip text
 local BAR_ALPHA = "C0"                     -- bar background transparency (00 opaque, FF invisible)
 local HIDE_AFTER = 0.5                      -- seconds without mouse movement
@@ -371,7 +371,7 @@ end)
 mp.observe_property("osd-dimensions", "native", function(_, d)
     if d and d.w and d.h and d.w > 0 and d.h > 0 then
         W, H = d.w, d.h
-        k = math.max(0.6, H / 1080)
+        k = math.max(0.6, math.min(W / 1920, H / 1080))   -- a tall window doesn't make the bar huge
     end
     render()
 end)

@@ -3,7 +3,6 @@
 -- room (the first in the list, played on start). Typing filters the list.
 -- It also fills mpv's right-click menu: the rooms, the chat overlay, fullscreen and quit.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
-local utils = require "mp.utils"
 local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 0.39 or newer
 
 local rooms, playing = {}, false
@@ -40,8 +39,9 @@ mp.add_forced_key_binding("MBTN_RIGHT", "cnlv-context-menu", function()
     end
 end)
 
-mp.register_script_message("cnlv-rooms", function(json)
-    local data = utils.parse_json(json) or {}
+-- cn-live-viewer keeps the room list in this property ({playing, rooms}); it's there whenever this script loads
+mp.observe_property("user-data/cnlv/rooms", "native", function(_, data)
+    data = data or {}
     rooms, playing = data.rooms or {}, data.playing
     update_menu()
 end)
@@ -131,5 +131,3 @@ mp.add_key_binding("TAB", "cnlv-picker", function()
     })
 end)
 
--- ask the controller for the list in case this script loaded after it was sent
-send("cnlv-ready")

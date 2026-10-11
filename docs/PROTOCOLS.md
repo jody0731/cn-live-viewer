@@ -110,15 +110,13 @@ cursor. [`pb.py`](../src/cn_live_viewer/pb.py) reads the wire format without `.p
 
 ## cn-live-viewer and its mpv scripts
 
-cn-live-viewer starts mpv with `--input-ipc-server=<socket>` and loads its two Lua scripts with `--script=`. They
+cn-live-viewer starts mpv with `--input-ipc-server=<socket>` (a named pipe, `\\.\pipe\...`, on Windows) and loads its three Lua scripts with `--script=`. They
 talk through `script-message`:
 
 | Message | From → to | Meaning |
 |---|---|---|
 | `cnlv-danmaku <text>` | controller → danmaku.lua | add one chat message to the overlay |
 | `cnlv-danmaku-clear` | controller → danmaku.lua | clear the overlay (on room switch) |
-| `cnlv-rooms <json>` | controller → picker.lua | `{"playing": bool, "rooms": [...]}`, the current room marked |
-| `cnlv-ready` | picker.lua → controller | the script has loaded; send the room list |
 | `cnlv-switch <platform> <room>` | picker.lua → controller | play that room |
 | `cnlv-save` | picker.lua → controller | save the current room to the list |
 | `cnlv-add <text>` | picker.lua → controller | look up a room number or link and add it |
@@ -129,5 +127,8 @@ talk through `script-message`:
 The three scripts:
 - **danmaku.lua** draws the chat. It publishes whether the overlay is on in the property `user-data/cnlv/chat`.
 - **picker.lua** handles the room list (Tab) and fills mpv's right-click menu (`menu-data`).
+  It reads the rooms from the property `user-data/cnlv/rooms`, which the controller keeps current:
+  `{"playing": bool, "rooms": [...]}` with the current room marked. A property rather than a message,
+  so the list is there whenever the script loads.
 - **bar.lua** is the control bar. Its buttons call the other two through `script-binding picker/cnlv-picker` and
   `script-binding danmaku/cnlv-toggle-danmaku`.

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0 (2026-10-11)
+
+- Fixed: a Huya room number with no room showed Streamlink's raw validation error on screen; it now says
+  "offline or not found". Quitting while a room is loading no longer prints a traceback.
+- macOS and Windows support:
+  - **Connection:** mpv is reached through a named pipe on Windows.
+  - **Finding mpv:** Homebrew, Scoop and Chocolatey installs are found even without PATH.
+  - **Room list:** kept in `%APPDATA%` on Windows.
+  - **Launcher:** an app in `~/Applications` on macOS, a Start menu shortcut without a console on Windows.
+  - **Installer:** `install.ps1` for Windows.
+  - **Tests:** CI runs on all three, including a test that starts the real mpv with the scripts.
+- App launcher for Linux desktops: `cn-live-viewer desktop` adds CN Live Viewer (with mpv's icon) to the app menu,
+  so it starts without a terminal and can be pinned. `install.sh` adds it. Started from the launcher with no rooms
+  saved yet, the player opens anyway and asks you to add one.
+- Fixed: when the room played on start was offline or unknown, the room list (Tab) was empty. It now always
+  shows the saved rooms, and the error says to press Tab for another room.
+- Chat and the control bar scale to fit the window by width or height, whichever is smaller, so tall or narrow
+  windows (e.g. a portrait monitor) no longer get oversized text. Chat starts at the picture's top edge, not
+  over a black bar, and uses as many rows as fit in the picture's upper half.
+
 ## 0.7.0 (2026-10-11)
 
 - The control bar is slimmer (three quarters of its old height) and mostly see-through.

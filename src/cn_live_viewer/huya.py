@@ -44,10 +44,15 @@ def uid_from_url(url: str):
 def stream_url(room: str, ratio: int = DEFAULT_RATIO):
     """-> (FLV url, presenter uid or None, streamer name or None). Raises LookupError when the room is offline or unknown."""
     from streamlink import Streamlink
+    from streamlink.exceptions import StreamlinkError
     session = Streamlink()
-    _, plugin_class, page = session.resolve_url(f'https://www.huya.com/{room}')
-    plugin = plugin_class(session, page)
-    streams = plugin.streams()
+    try:
+        _, plugin_class, page = session.resolve_url(f'https://www.huya.com/{room}')
+        plugin = plugin_class(session, page)
+        streams = plugin.streams()
+    except StreamlinkError as e:             # e.g. a room number with no room: Streamlink's page check fails
+        log.info('Streamlink: %s', e)
+        raise LookupError(f'Huya room {room} is offline or not found') from None
     s = streams.get('hs_source') or streams.get('best')
     if not s or not getattr(s, 'url', None):
         raise LookupError(f'Huya room {room} is offline or not found')

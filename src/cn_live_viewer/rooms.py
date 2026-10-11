@@ -17,7 +17,11 @@ EXAMPLE = """\
 
 
 def default_path() -> str:
-    base = os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config')
+    """%APPDATA%\\cn-live-viewer on Windows; ~/.config/cn-live-viewer elsewhere, macOS included (as mpv does)."""
+    if os.name == 'nt':
+        base = os.environ.get('APPDATA') or os.path.join(os.path.expanduser('~'), 'AppData', 'Roaming')
+    else:
+        base = os.environ.get('XDG_CONFIG_HOME') or os.path.join(os.path.expanduser('~'), '.config')
     return os.path.join(base, 'cn-live-viewer', 'rooms.conf')
 
 

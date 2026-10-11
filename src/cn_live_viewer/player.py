@@ -1,6 +1,5 @@
 """The player: one mpv window, the current room's stream and chat, and switching rooms from inside mpv."""
 import asyncio
-import json
 import logging
 import os
 import re
@@ -74,9 +73,11 @@ class Player:
         return self.names.get((platform, room)) or f'{platform} {room}'
 
     async def send_rooms(self):
+        # a property, not a message: picker.lua reads it whenever it loads, so it can't miss the list (a message
+        # sent before it loaded, or one it sent before we connected, was lost, and the room list stayed empty)
         data = {'playing': self.current is not None,
                 'rooms': [dict(r, current=(r['platform'], r['room']) == self.current) for r in self.rooms]}
-        await self.mpv.command('script-message', 'cnlv-rooms', json.dumps(data, ensure_ascii=False))
+        await self.mpv.command('set_property', 'user-data/cnlv/rooms', data)
 
     async def _chat(self, gen):
         try:
@@ -98,7 +99,7 @@ class Player:
         try:
             url, referer, chat, streamer = await resolve(platform, room, self.quality)
         except Exception as e:
-            await self.mpv.show(f'✗ {e}', 4)
+            await self.mpv.show(f'✗ {e}\nTab: choose another room', 6)
             print(f'-- {e}', file=sys.stderr, flush=True)
             self.switching = False
             return False
@@ -192,8 +193,6 @@ class Player:
                     asyncio.create_task(self.make_default(*args))
                 elif msg == 'cnlv-remove' and len(args) == 2:
                     asyncio.create_task(self.remove(*args))
-                elif msg == 'cnlv-ready':
-                    await self.send_rooms()
             elif name == 'end-file' and ev.get('reason') in ('eof', 'error') and self.current and not self.switching:
                 await self.mpv.show('Stream dropped, reconnecting …', 2)
                 await asyncio.sleep(2)
@@ -203,7 +202,11 @@ class Player:
         await self.mpv.start()
         events = asyncio.create_task(self._events())
         try:
-            await self.play(platform, room)
+            await self.send_rooms()                  # before the first room, so the list is there even if it fails
+            if platform:
+                await self.play(platform, room)
+            else:
+                await self.mpv.show('No rooms saved yet. Press Tab, then "Add a room…"', 30)
             await asyncio.wait([events, asyncio.create_task(self.mpv.proc.wait())],
                                return_when=asyncio.FIRST_COMPLETED)
         finally:

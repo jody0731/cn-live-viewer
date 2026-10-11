@@ -27,33 +27,60 @@ cn-live-viewer https://live.douyin.com/286658238204
 
 | | |
 |---|---|
-| OS | Linux. macOS should work but is untested. Windows is not supported yet. |
+| OS | Linux, macOS or Windows. It's developed on Linux. On macOS and Windows, automated tests check that it installs, starts mpv and loads its scripts, but nobody has watched a stream there yet. |
 | Python | 3.10 or newer |
 | mpv | 0.39 or newer for the room list. Older versions play and show chat but have no room list. |
-| Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux, PingFang SC on macOS (built in) |
+| Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux. macOS (PingFang SC) and Windows (Microsoft YaHei) have one built in. |
 
 Install the system packages first:
 
-```bash
-sudo apt install mpv pipx fonts-noto-cjk
-```
-
 | System | Command |
 |---|---|
+| Debian, Ubuntu | `sudo apt install mpv pipx fonts-noto-cjk` |
 | Fedora | `sudo dnf install mpv pipx google-noto-sans-cjk-fonts` (mpv comes from RPM Fusion) |
 | Arch | `sudo pacman -S mpv python-pipx noto-fonts-cjk` |
 | macOS | `brew install mpv pipx` |
+| Windows | Python from [python.org](https://www.python.org/downloads/), and mpv from [mpv.io](https://mpv.io/installation/), e.g. `scoop install extras/mpv` |
 
 ## Install
+
+Linux and macOS:
 
 ```bash
 pipx install git+https://github.com/jody0731/cn-live-viewer
 ```
 
-From a clone, `./install.sh` does the same. Without pipx it installs into a private virtual environment and links
-the command into `~/.local/bin`.
+From a clone, `./install.sh` does the same and adds the app launcher. Without pipx, it installs into a private
+virtual environment and links the command into `~/.local/bin`.
 
-Update with `pipx upgrade cn-live-viewer`. Uninstall with `pipx uninstall cn-live-viewer`.
+Windows, in PowerShell from a clone:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+It installs into a private Python environment and adds **CN Live Viewer** to the Start menu. Git isn't needed:
+without a clone, the script fetches the latest version from GitHub.
+
+Update with `pipx upgrade cn-live-viewer` (Windows: run `install.ps1` again). Uninstall with
+`pipx uninstall cn-live-viewer`.
+
+### App launcher
+
+```bash
+cn-live-viewer desktop
+```
+
+This adds **CN Live Viewer**, with mpv's icon, so you can start it without a terminal:
+
+| System | Where it goes |
+|---|---|
+| Linux | The app menu and search. You can pin it to a panel or dock, and a Huya or Douyin link dropped on it opens that room. |
+| macOS | `~/Applications`, so it's in Launchpad and Spotlight |
+| Windows | The Start menu. It runs without a console window. |
+
+The installers add it for you. It opens the default room; without a terminal, chat shows only on the video. Remove
+it with `cn-live-viewer desktop remove`.
 
 ## Use
 
@@ -63,6 +90,7 @@ Update with `pipx upgrade cn-live-viewer`. Uninstall with `pipx uninstall cn-liv
 | `cn-live-viewer chat ROOM` | Print a room's chat in the terminal only |
 | `cn-live-viewer url ROOM` | Print the stream address, for another player |
 | `cn-live-viewer rooms` | List the saved rooms and show where the list is |
+| `cn-live-viewer desktop [remove]` | Add (or remove) the app launcher |
 
 ROOM is a room number or a link. A bare number is a Huya room unless it's saved as a Douyin room.
 
@@ -103,7 +131,8 @@ With the mouse:
 
 ## The room list
 
-`~/.config/cn-live-viewer/rooms.conf`, created on the first run. One room per line:
+`~/.config/cn-live-viewer/rooms.conf` (Windows: `%APPDATA%\cn-live-viewer\rooms.conf`), created on the first
+run. `cn-live-viewer rooms` shows where it is. One room per line:
 
 ```
 # platform  room            name

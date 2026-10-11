@@ -1,6 +1,7 @@
 import contextlib
 import io
 import os
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -16,9 +17,10 @@ class RoomsTest(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def test_default_path_follows_xdg(self):
-        with mock.patch.dict(os.environ, {'XDG_CONFIG_HOME': '/x/config'}):
-            self.assertEqual(rooms.default_path(), os.path.join('/x/config', 'cn-live-viewer', 'rooms.conf'))
+    def test_default_path(self):
+        key = 'APPDATA' if os.name == 'nt' else 'XDG_CONFIG_HOME'      # Windows: %APPDATA%; elsewhere XDG / ~/.config
+        with mock.patch.dict(os.environ, {key: os.path.join('x', 'config')}):
+            self.assertEqual(rooms.default_path(), os.path.join('x', 'config', 'cn-live-viewer', 'rooms.conf'))
 
     def test_new_list_has_only_comments(self):
         rooms.ensure(self.path)
@@ -97,6 +99,46 @@ class CliTest(unittest.TestCase):
         code, _, err = self.run_cli('url', 'not a room!')
         self.assertEqual(code, 2)
         self.assertIn('not a Huya/Douyin room', err)
+
+
+class DesktopTest(unittest.TestCase):
+    """The app launcher, on whichever system runs the tests (CI covers Linux, macOS and Windows)."""
+
+    def setUp(self):
+        from cn_live_viewer import desktop
+        self.desktop = desktop
+        self.dir = tempfile.TemporaryDirectory()
+        env = {'APPDATA': self.dir.name, 'XDG_DATA_HOME': self.dir.name, 'HOME': self.dir.name}
+        self.patches = [mock.patch.dict(os.environ, env),
+                        mock.patch.object(desktop, '_refresh')]    # don't touch the real desktop's menu cache
+        for patch in self.patches:
+            patch.start()
+
+    def tearDown(self):
+        for patch in self.patches:
+            patch.stop()
+        self.dir.cleanup()
+
+    def test_launcher_is_added_and_removed(self):
+        p = self.desktop.install()
+        self.assertTrue(p.startswith(self.dir.name), p)
+        self.assertTrue(os.path.exists(p), p)
+        if os.name == 'nt':
+            self.assertTrue(p.endswith('CN Live Viewer.lnk'))
+        elif sys.platform == 'darwin':
+            import plistlib
+            with open(os.path.join(p, 'Contents', 'Info.plist'), 'rb') as f:
+                self.assertEqual(plistlib.load(f)['CFBundleExecutable'], 'cn-live-viewer')
+            self.assertTrue(os.access(os.path.join(p, 'Contents', 'MacOS', 'cn-live-viewer'), os.X_OK))
+        else:
+            with open(p, encoding='utf-8') as f:
+                text = f.read()
+            for line in ('Icon=mpv', 'Terminal=false', 'StartupWMClass=cn-live-viewer'):
+                self.assertIn(line, text.splitlines())
+            self.assertRegex(text, r'(?m)^Exec=".+" .*--launcher %u$')
+        self.assertTrue(self.desktop.remove())
+        self.assertFalse(os.path.exists(p))
+        self.assertFalse(self.desktop.remove())
 
 
 class PackageTest(unittest.TestCase):

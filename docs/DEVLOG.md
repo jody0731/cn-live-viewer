@@ -307,3 +307,89 @@ background. A faint dark outline keeps the text readable over bright video.
 
 The seek row now has mpv's own readouts: the playback time on the left and "Cache", the seconds buffered ahead, on
 the right. The strip shows played (red) and received but not yet played (light grey).
+
+### Adapting to other screens
+
+A review of how cn-live-viewer behaves on screens unlike the development machine. Most of it already adapts:
+- **Picture:** mpv renders at the window's own resolution. A 1080p stream on a 1080p screen is shown at its native
+  size; the upscaler only runs when the window is bigger than the video, as on a 4K screen.
+- **UI:** the chat overlay and the control bar draw in the window's real pixels, so they are sharp at any
+  resolution and any HiDPI scale.
+- **Refresh rate:** chat moves on every display refresh, up to 240 Hz, and follows the window to another monitor.
+- **Fonts:** a Simplified Chinese font is picked per OS.
+- **Decoding:** GPU decoding falls back to the CPU where the GPU can't decode.
+
+Two things didn't adapt, both visible on a portrait (1440x2560) monitor:
+- **Scale:** both scaled by window height alone, so a tall window made the bar and the chat text 2.3 times
+  normal size. They now scale by width or height, whichever is smaller.
+- **Chat position:** chat started at the window's top. With a 16:9 stream in a tall window, that is a black bar.
+  It now starts at the picture's top edge (mpv's `osd-dimensions` margins). It uses as many rows as fit in the
+  picture's upper half, at most 14.
+
+### Empty room list after a failed start
+
+When the room played on start was offline, the room list (Tab) was empty. The list only reached the menu script in
+two ways, and both failed here:
+- after a room started playing, which never happened;
+- through a "ready" message the script sends when it loads. It sends that before cn-live-viewer has connected to
+  mpv's socket, so nobody received it.
+
+The controller now keeps the list in an mpv property (`user-data/cnlv/rooms`) instead, and sets it before trying the
+first room. The script observes the property, so it sees the list whenever it loads. The error message also says
+to press Tab for another room.
+
+### App launcher
+
+`cn-live-viewer desktop` writes `~/.local/share/applications/cn-live-viewer.desktop`. With it the program is in the
+app menu and search, can be pinned, and starts without a terminal.
+- **Icon:** mpv's (`Icon=mpv`).
+- **Opening:** it opens the default room. A Huya or Douyin link dropped on it is opened instead (`%u`).
+- **Install:** `install.sh` adds it on Linux.
+
+So the running window groups under the launcher, not under mpv's own icon, cn-live-viewer gives mpv the window id
+`cn-live-viewer` (`--x11-name`, `--wayland-app-id`). Older mpv refuses to start on an option it doesn't know, so
+`--wayland-app-id` is only passed when `mpv --list-options` lists it.
+
+With no terminal, the "no rooms saved" error would go nowhere. So when the launcher starts it (a hidden `--launcher`
+flag) and no rooms are saved, the player opens anyway with "No rooms saved yet. Press Tab, then Add a room".
+
+### macOS and Windows
+
+What differed by platform, and what changed:
+- **Talking to mpv:** mpv's JSON IPC is a Unix socket on Linux and macOS and a named pipe (`\\.\pipe\...`) on
+  Windows. On Windows the controller connects with asyncio's `create_pipe_connection` and retries until mpv has
+  opened the pipe.
+- **Finding mpv:** an app started from the Finder or a Start menu shortcut gets a short PATH. So mpv is also looked
+  for where Homebrew, Scoop and Chocolatey put it.
+- **Window names:** the Linux window-name options (`--x11-name`, `--wayland-app-id`) are only passed on Linux.
+- **Room list:** `%APPDATA%\cn-live-viewer` on Windows. macOS keeps `~/.config`, as mpv does there.
+- **Console:** started without a console on Windows, `sys.stdout` is `None`, so output goes to `os.devnull`. A pipe
+  that can't take Chinese text replaces the characters instead of crashing. Colour codes are turned on in the
+  Windows console.
+- **Launcher:**
+  - macOS: `~/Applications/CN Live Viewer.app`, a small bundle whose starter runs `python -m cn_live_viewer`, with
+    mpv's icon when an mpv.app is found;
+  - Windows: a Start menu shortcut to `pythonw.exe` (no console window), with mpv.exe's icon.
+- **Installer:** `install.ps1` for Windows. It installs from GitHub's zip, so git isn't needed.
+- **Fonts:** already mapped: PingFang SC on macOS, Microsoft YaHei on Windows.
+
+**Tests:** none of this can run on the Linux development machine, so CI does it.
+- The unit tests now run on Windows too, and the launcher test checks each system's own launcher.
+- A new smoke test (`tests/test_mpv_smoke.py`) starts the real mpv without a window over the real IPC (socket or
+  pipe). It checks that the three scripts load without errors and react: the chat overlay's state, and the room
+  list reaching the right-click menu. CI installs mpv with apt, Homebrew and Chocolatey to run it.
+- Watching a real stream on macOS and Windows is still untried.
+
+**Pre-push checks for 0.8.0:**
+- **Unit tests:** all 32 pass, including the new mpv smoke test on Linux.
+- **Tall window (720x1280):** chat starts at the picture's top edge and the bar is sized by the width.
+- **Failed start:** with a bogus default room, the room list and the right-click menu showed the saved rooms. Choosing
+  another room from there loaded it.
+- **Launcher with no rooms saved:** the player opened, idle.
+- **Playback:** a live Huya room played with 0 dropped frames.
+
+The checks also turned up two problems, both fixed:
+- **Raw error on screen:** a Huya room number with no room made Streamlink raise its own validation error, which
+  appeared on screen as a 10-line dump. Streamlink errors now become "offline or not found".
+- **Traceback on quit:** quitting mpv while a room was loading printed a traceback (a write to the closed
+  connection). Commands to an mpv that has closed are now ignored.

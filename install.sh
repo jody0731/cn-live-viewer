@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install cn-live-viewer for the current user (Linux; macOS should work too).
+# Install cn-live-viewer for the current user on Linux or macOS (Windows: install.ps1).
 #   ./install.sh            from a clone of the repository
 #   sh install.sh           the same
 # Uses pipx when it is installed, otherwise a private virtual environment linked into ~/.local/bin.
@@ -36,4 +36,7 @@ else
         *) echo "Add ~/.local/bin to your PATH to run it by name." ;;
     esac
 fi
+# the app launcher: the app menu on Linux, ~/Applications (Launchpad, Spotlight) on macOS
+exe=$(command -v cn-live-viewer || echo "$HOME/.local/bin/cn-live-viewer")
+"$exe" desktop || echo "Could not add the app launcher; run 'cn-live-viewer desktop' later." >&2
 echo "Run: cn-live-viewer 333003   (any Huya or Douyin room number or link)"

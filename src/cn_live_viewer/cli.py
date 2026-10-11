@@ -1,12 +1,13 @@
-"""Command line: cn-live-viewer [room] | chat <room> | url <room> | rooms"""
+"""Command line: cn-live-viewer [room] | chat <room> | url <room> | rooms | desktop [remove]"""
 import argparse
 import asyncio
 import logging
 import os
 import shlex
+import subprocess
 import sys
 
-from . import __version__, douyin, huya, rooms as roomlist
+from . import __version__, desktop, douyin, huya, rooms as roomlist
 from .player import Player, print_chat
 
 USAGE = """\
@@ -14,6 +15,7 @@ cn-live-viewer [options] [ROOM]        watch a room in mpv (default: the first s
 cn-live-viewer chat ROOM               print a room's live chat in the terminal
 cn-live-viewer url  ROOM               print the stream address (for another player)
 cn-live-viewer rooms                   list saved rooms and where the list is
+cn-live-viewer desktop [remove]        add (or remove) the app launcher: app menu, search, pin to a panel
 
 ROOM is a Huya or Douyin room number or link. Bare numbers are Huya rooms unless saved as Douyin.
 In mpv:  Tab  room list: Enter switches; the entries after the rooms add, save, rename or remove rooms
@@ -22,7 +24,27 @@ In mpv:  Tab  room list: Enter switches; the entries after the rooms add, save, 
 """
 
 
+MPV_HINTS = {
+    'darwin': 'brew install mpv',
+    'win32': 'see https://mpv.io/installation/ (e.g. scoop install extras/mpv, or choco install mpv)',
+}
+
+
+def setup_console() -> None:
+    """Make printing safe everywhere: started from a launcher on Windows there is no console at all, and a pipe
+    or a file may not take Chinese text in the system's encoding."""
+    for name in ('stdout', 'stderr'):
+        stream = getattr(sys, name)
+        if stream is None:
+            setattr(sys, name, open(os.devnull, 'w', encoding='utf-8'))
+        elif hasattr(stream, 'reconfigure'):
+            stream.reconfigure(errors='replace')
+    if os.name == 'nt' and sys.stdout.isatty():
+        os.system('')                                # turns on colour codes in the Windows console
+
+
 def main(argv=None):
+    setup_console()
     p = argparse.ArgumentParser(prog='cn-live-viewer', usage=USAGE, add_help=True)
     p.add_argument('words', nargs='*', help=argparse.SUPPRESS)
     p.add_argument('-q', '--quality', help='Huya: bitrate in kbps (default 20000); Douyin: origin/hd/sd/ld/md')
@@ -31,13 +53,27 @@ def main(argv=None):
     p.add_argument('--mpv-args', default='', help='extra mpv options as one argument, e.g. --mpv-args="--volume=70 --fs"')
     p.add_argument('-v', '--verbose', action='store_true', help='log connection details')
     p.add_argument('-V', '--version', action='version', version=f'cn-live-viewer {__version__}')
+    p.add_argument('--launcher', action='store_true', help=argparse.SUPPRESS)   # started from the app launcher
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format='-- %(message)s')
 
     roomlist.ensure(a.rooms)
     rooms = roomlist.load(a.rooms)
     words = a.words
-    cmd = words[0] if words and words[0] in ('chat', 'url', 'rooms') else None
+    cmd = words[0] if words and words[0] in ('chat', 'url', 'rooms', 'desktop') else None
+
+    if cmd == 'desktop':
+        if words[1:2] == ['remove']:
+            print('App launcher removed' if desktop.remove() else 'There was no app launcher to remove')
+            return 0
+        try:
+            where = desktop.install()
+        except (OSError, subprocess.CalledProcessError) as e:
+            print(f'Could not add the app launcher: {e}', file=sys.stderr)
+            return 1
+        place = {'win32': 'the Start menu', 'darwin': 'Launchpad and Spotlight'}.get(sys.platform, 'your app menu')
+        print(f'App launcher added: {where}\nFind "CN Live Viewer" in {place}.')
+        return 0
 
     if cmd == 'rooms':
         print(f'# {a.rooms}')
@@ -47,11 +83,12 @@ def main(argv=None):
 
     target = (words[1] if cmd and len(words) > 1 else None) if cmd else (words[0] if words else None)
     if target is None:
-        if cmd or not rooms:
+        if cmd or (not rooms and not a.launcher):
             p.print_usage()
             print(f'\nNo room given and none saved yet: add rooms to {a.rooms}', file=sys.stderr)
             return 2
-        platform, room = rooms[0]['platform'], rooms[0]['room']
+        # from the launcher with no rooms saved, the player opens anyway, ready to add one (there's no terminal)
+        platform, room = (rooms[0]['platform'], rooms[0]['room']) if rooms else (None, None)
     else:
         try:
             platform, room = roomlist.parse_target(target, rooms)
@@ -82,7 +119,8 @@ def main(argv=None):
         return 1
     except FileNotFoundError as e:
         if 'mpv' in str(e):
-            print('mpv is not installed (Debian/Ubuntu: sudo apt install mpv)', file=sys.stderr)
+            hint = MPV_HINTS.get(sys.platform, 'e.g. sudo apt install mpv, sudo dnf install mpv or sudo pacman -S mpv')
+            print(f'mpv is not installed ({hint})', file=sys.stderr)
             return 1
         raise
     except BrokenPipeError:                      # output piped into a command that stopped reading, e.g. head
