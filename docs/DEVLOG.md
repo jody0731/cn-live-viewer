@@ -497,3 +497,13 @@ scans the mpv scripts for use-before-define.
 The mobile room page, where the streamer's id came from, doesn't have it while the room is offline. That also
 meant an offline Huya room couldn't be added at all. The room-profile API, already used for the live markers, has
 the id and the name either way, so `huya.room_info` uses it now and the page scraping is gone.
+
+### The bar scales with the window's height again
+
+In 0.8.0 the control bar started scaling by the window's width or height, whichever was smaller, so a tall window
+wouldn't make it huge. Jody preferred the earlier behaviour: the bar follows the window's height, like the rest of
+mpv's on-screen controls. It's back to that. The chat overlay keeps fitting the picture.
+
+The pre-push check of this change turned up an overlap. In a narrow window, scaled by height, the room name and the
+quality button collided: the name was shortened to one character but never dropped. Now a name that can't fit at
+all is left out (the Tab list still has it).

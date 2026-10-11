@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.1 (2026-10-11)
+
+- The control bar scales with the window's height again (as before 0.8.0). The chat still fits the picture.
+- In a narrow window the room name no longer overlaps the quality button; if it can't fit, it's left out.
+
 ## 0.10.0 (2026-10-11)
 
 - The room lists start each room with its status: ● Live, ○ Offline, ▶ Playing / ▶ Waiting. All saved rooms are
