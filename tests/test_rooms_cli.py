@@ -60,6 +60,19 @@ class RoomsTest(unittest.TestCase):
             f.write('twitch 1 nope\nhuya\n\n  # comment\nhuya 1 a name with spaces\n')
         self.assertEqual(rooms.load(self.path), [{'platform': 'huya', 'room': '1', 'name': 'a name with spaces'}])
 
+    def test_recent_rooms_newest_first(self):
+        for room in ('1', '2', '1', '3'):
+            rooms.remember(self.path, 'huya', room)
+        self.assertEqual(rooms.load_recent(self.path), [('huya', '3'), ('huya', '1'), ('huya', '2')])
+
+    def test_start_order(self):
+        saved = [{'platform': 'huya', 'room': r, 'name': r} for r in ('A', 'B', 'C')]
+        recent = [('douyin', 'X'), ('huya', 'C'), ('huya', 'A')]
+        # the default room, then the recent ones (newest first), then the rest of the list; each once
+        self.assertEqual(rooms.start_order(saved, recent),
+                         [('huya', 'A'), ('douyin', 'X'), ('huya', 'C'), ('huya', 'B')])
+        self.assertEqual(rooms.start_order([], []), [])
+
     def test_parse_target(self):
         saved = [{'platform': 'douyin', 'room': '555', 'name': 'x'}]
         self.assertEqual(rooms.parse_target('333003', saved), ('huya', '333003'))

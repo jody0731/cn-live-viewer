@@ -2,10 +2,12 @@
 -- Top: the playback time, a seek strip over what mpv has buffered (red: played, light: received but not yet
 -- played; click or drag to go back, the right end is live), and how many seconds are buffered ahead (Cache).
 -- Bottom row, left: mpv's menu, play/pause, the LIVE badge (how far behind live; click to catch up) and the room
--- name, which opens the room list. Right: the chat overlay, volume and fullscreen.
+-- name, which opens the room list. Right: the quality (Auto or a fixed level; click to choose), the chat overlay,
+-- volume and fullscreen.
 -- It shows when the mouse moves over the window and hides when the mouse rests. Each control has a tooltip.
 -- Loaded only for cn-live-viewer's mpv sessions.
 
+local has_input, input = pcall(require, "mp.input")   -- the quality list needs mpv 0.39 or newer
 local ICON_FONT = "mpv-osd-symbols"         -- mpv's built-in icon font, the one its own control bar uses
 local ICONS = {
     menu = "\238\132\130", play = "\238\132\129", pause = "\238\128\130", chat = "\238\132\135",
@@ -30,6 +32,8 @@ local bar_top, row_top, strip_x0, strip_x1 = H, H, 0, W
 local hide_timer, refresh_timer, last_seek = nil, nil, 0
 local overlay = mp.create_osd_overlay("ass-events")
 overlay.z = 500                             -- above the chat overlay
+local measurer = mp.create_osd_overlay("ass-events")   -- hidden; libass measures text in it (as mpv's console does)
+measurer.compute_bounds, measurer.hidden = true, true
 
 local UTF8_CHAR = "[%z\1-\127\194-\244][\128-\191]*"      -- one UTF-8 character (no utf8 library in mpv's Lua)
 
@@ -59,6 +63,34 @@ end
 
 local function chat_on()
     return mp.get_property_native("user-data/cnlv/chat") ~= false
+end
+
+-- the quality, as cn-live-viewer reports it in user-data/cnlv/quality: {auto, current, label, tiers}
+local function quality()
+    return mp.get_property_native("user-data/cnlv/quality") or {}
+end
+
+local function quality_label()
+    local qd = quality()
+    local short = (qd.label or ""):match("([%d%.]+ Mbps)") or (qd.label or ""):match("^[^·]+") or ""
+    short = short:gsub("%s+$", "")
+    if qd.auto then return short ~= "" and ("Auto · " .. short) or "Auto" end
+    return short ~= "" and short or "Quality"
+end
+
+local function choose_quality()
+    local qd = quality()
+    if not has_input or not input.select then
+        mp.osd_message("Choosing the quality here needs mpv 0.39 or newer (or right-click, Quality)", 3)
+        return
+    end
+    local items, ids, default = { qd.label and qd.label ~= "" and ("Auto (now " .. qd.label .. ")") or "Auto" }, { "auto" }, 1
+    for _, t in ipairs(qd.tiers or {}) do
+        items[#items + 1], ids[#ids + 1] = t.label, t.id
+        if not qd.auto and t.id == qd.current then default = #items end
+    end
+    input.select({ prompt = "Quality:", items = items, default_item = default,
+                   submit = function(i) mp.commandv("script-message", "cnlv-quality", ids[i]) end })
 end
 
 -- the buffered stretch that can be sought: (start, end) in stream time, or nil while there is none
@@ -120,6 +152,16 @@ local CONTROLS = {
         tip = function() return "Switch room (Tab)" end,
         click = function() mp.commandv("script-binding", "picker/cnlv-picker") end,
     },
+    quality = {
+        tip = function()
+            local qd = quality()
+            if qd.auto then
+                return "Quality: Auto, now " .. (qd.label or "?") .. ". It steps down if the connection can't keep up. Click to choose"
+            end
+            return "Quality: " .. (qd.label or "?") .. ", fixed. Click to choose"
+        end,
+        click = choose_quality,
+    },
     chat = {
         tip = function() return chat_on() and "Chat overlay is on: click to hide (C)" or "Chat overlay is off: click to show (C)" end,
         click = function() mp.commandv("script-binding", "danmaku/cnlv-toggle-danmaku") end,
@@ -145,6 +187,16 @@ local CONTROLS = {
         end,
     },
 }
+
+-- the real rendered width of a text, measured by libass (the character-count estimate runs wide for Latin text);
+-- falls back to the estimate if this mpv can't measure
+local function measure(s, font, fs)
+    measurer.res_x, measurer.res_y = W, H
+    measurer.data = string.format("{\\an7\\pos(0,0)\\fn%s\\fs%d\\bord0\\shad0}%s", font, fs, s)
+    local b = measurer:update()
+    if b and b.x0 and b.x1 and b.x1 > b.x0 then return b.x1 - b.x0 end
+    return width(s, fs)
+end
 
 -- ASS drawing helpers; colours are &HBBGGRR&, alpha 00 = opaque
 local function rect(x, y, w, h, colour, alpha)
@@ -235,6 +287,7 @@ local function render()
     local vol = string.format("%d", px(mp.get_property_number("volume", 100)))
     x = x - button("volume", x, "right", volume_icon(), vol, mp.get_property_bool("mute")) - 2 * pad
     x = x - button("chat", x, "right", ICONS.chat, "Chat", not chat_on()) - 2 * pad
+    x = x - button("quality", x, "right", nil, quality_label()) - 2 * pad
     local right_edge = x
 
     -- left side: menu, play/pause, LIVE badge, then the room name, shortened to fit
@@ -275,7 +328,7 @@ local function render()
         if cx then
             local tip = CONTROLS[hovered].tip()
             local tfs = px(TIP * k)
-            local tw, tht = width(tip, tfs) * 0.85 + 24 * k, px(tfs * 1.6)
+            local tw, tht = measure(esc(tip), FONT, tfs) + 24 * k, px(tfs * 1.6)
             local tx = math.max(8 * k, math.min(cx - tw / 2, W - tw - 8 * k))
             local ty = y0 - 8 * k - tht
             out[#out + 1] = rect(tx, ty, tw, tht, "000000", "30")
@@ -376,6 +429,7 @@ mp.observe_property("osd-dimensions", "native", function(_, d)
     render()
 end)
 
-for _, p in ipairs({ "pause", "mute", "volume", "fullscreen", "media-title", "user-data/cnlv/chat" }) do
+for _, p in ipairs({ "pause", "mute", "volume", "fullscreen", "media-title", "user-data/cnlv/chat",
+                    "user-data/cnlv/quality" }) do
     mp.observe_property(p, "native", function() if visible then render() end end)
 end

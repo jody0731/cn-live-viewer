@@ -1,12 +1,14 @@
 """The player: one mpv window, the current room's stream and chat, and switching rooms from inside mpv."""
 import asyncio
 import logging
+import math
 import os
 import re
 import sys
+import time
 import zlib
 
-from . import douyin, huya, rooms as roomlist
+from . import douyin, huya, quality as q, rooms as roomlist
 from .mpv import Mpv
 
 log = logging.getLogger(__name__)
@@ -36,15 +38,13 @@ def print_chat(nick: str, text: str, color: bool) -> None:
         print(f'{nick}: {text}', flush=True)
 
 
-async def resolve(platform: str, room: str, quality: str = None):
-    """-> (stream url, referer, chat async generator, streamer name or None)"""
+def levels(platform: str, room: str):
+    """-> (quality levels best first, referer, a function making the chat generator, streamer name or None)"""
     if platform == 'huya':
-        ratio = int(quality) if quality and quality.isdigit() else huya.DEFAULT_RATIO
-        url, uid, name = await asyncio.to_thread(huya.stream_url, room, ratio)
-        return url, huya.REFERER, huya.chat(room, uid), name
-    q = quality if quality in douyin.QUALITIES else 'origin'
-    url, internal, name = await asyncio.to_thread(douyin.stream_url, room, q)
-    return url, douyin.REFERER, douyin.chat(room, internal), name
+        tiers, uid, name = huya.streams(room)
+        return tiers, huya.REFERER, lambda: huya.chat(room, uid), name
+    tiers, internal, name = douyin.streams(room)
+    return tiers, douyin.REFERER, lambda: douyin.chat(room, internal), name
 
 
 def streamer_name(platform: str, room: str):
@@ -54,7 +54,11 @@ def streamer_name(platform: str, room: str):
 
 class Player:
     def __init__(self, rooms_path: str, quality: str = None, overlay: bool = True, mpv_args=None):
-        self.rooms_path, self.quality, self.overlay = rooms_path, quality, overlay
+        self.rooms_path, self.overlay = rooms_path, overlay
+        self.choice = q.parse(quality)               # AUTO, a cap in Mbps, or a Douyin quality name
+        self.auto = q.Auto()
+        self.tiers, self.tier = [], None             # the current room's levels and the one playing
+        self.stalled_since = None
         self.rooms = roomlist.load(rooms_path)
         self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + list(mpv_args or []))
         self.current = None
@@ -91,15 +95,18 @@ class Player:
         except Exception as e:                       # chat is best effort; the video keeps playing
             log.warning('chat stopped: %s', e)
 
-    async def play(self, platform: str, room: str, quiet: bool = False) -> bool:
+    async def play(self, platform: str, room: str, quiet: bool = False, next_room=None) -> bool:
+        """Play a room. next_room: on start, the room tried next if this one isn't live (the message says so)."""
         self.switching = True
         name = self.name_of(platform, room)
         if not quiet:
             await self.mpv.show(f'→ {name} …', 2)
         try:
-            url, referer, chat, streamer = await resolve(platform, room, self.quality)
+            tiers, referer, chat, streamer = await asyncio.to_thread(levels, platform, room)
+            tier = q.pick(tiers, self.choice, self.auto.cap)
         except Exception as e:
-            await self.mpv.show(f'✗ {e}\nTab: choose another room', 6)
+            hint = f'Trying {self.name_of(*next_room)} …' if next_room else 'Tab: choose another room'
+            await self.mpv.show(f'✗ {e}\n{hint}', 3 if next_room else 6)
             print(f'-- {e}', file=sys.stderr, flush=True)
             self.switching = False
             return False
@@ -111,13 +118,91 @@ class Player:
         await self.mpv.command('script-message', 'cnlv-danmaku-clear')
         await self.mpv.command('set_property', 'http-header-fields', [f'Referer: {referer}'])
         await self.mpv.command('set_property', 'force-media-title', name)
-        await self.mpv.command('loadfile', url, 'replace')
-        self.current = (platform, room)
-        print(f'======== {name} ({platform} {room}) ========', flush=True)
-        self.chat_task = asyncio.create_task(self._chat(chat))
+        await self.mpv.command('loadfile', tier.url, 'replace')
+        self.current, self.tiers, self.tier = (platform, room), tiers, tier
+        try:
+            roomlist.remember(self.rooms_path, platform, room)
+        except OSError:
+            pass
+        self.auto.changed(time.monotonic())
+        print(f'======== {name} ({platform} {room}) · {tier.label} ========', flush=True)
+        self.chat_task = asyncio.create_task(self._chat(chat()))
         await self.send_rooms()
+        await self.send_quality()
         self.switching = False
         return True
+
+    # ---------------------------------------------------------------- quality
+
+    async def send_quality(self):
+        """The quality menu's contents, for picker.lua (right-click menu) and bar.lua (the quality button)."""
+        data = {'auto': self.choice == q.AUTO, 'current': self.tier.id if self.tier else '',
+                'label': self.tier.label if self.tier else '',
+                'tiers': [{'id': t.id, 'label': t.label} for t in self.tiers]}
+        await self.mpv.command('set_property', 'user-data/cnlv/quality', data)
+
+    async def use_tier(self, tier, message: str, probing: bool = False):
+        """Switch the playing room to another level. The chat keeps running."""
+        self.switching = True
+        await self.mpv.command('loadfile', tier.url, 'replace')
+        self.tier = tier
+        self.auto.changed(time.monotonic(), probing)
+        await self.send_quality()
+        await self.mpv.show(message, 3)
+        print(f'-- {message}', flush=True)
+        await asyncio.sleep(1)                       # the replaced stream's end-file isn't a dropped stream
+        self.switching = False
+
+    async def set_quality(self, choice: str):
+        """From the menus: 'auto', or a level's id."""
+        if not self.tiers:
+            return
+        if choice == q.AUTO:
+            self.choice, self.auto.cap = q.AUTO, math.inf
+            tier = self.tiers[0]
+        else:
+            tier = next((t for t in self.tiers if t.id == choice), None)
+            if tier is None:
+                return
+            # a fixed level carries over to other rooms as a bitrate cap; audio only by name, where a room has it
+            self.choice = tier.mbps if tier.video else tier.id
+        if tier is not self.tier:
+            await self.use_tier(tier, f'Quality: {tier.label}' + (' (Auto)' if self.choice == q.AUTO else ''))
+        else:
+            await self.send_quality()
+            await self.mpv.show('Quality: Auto' if self.choice == q.AUTO else f'Quality: {tier.label}', 2)
+
+    async def on_cache_pause(self, paused: bool):
+        """mpv paused because the buffer ran dry (paused-for-cache), or resumed. Auto steps down when it keeps up."""
+        if not paused:
+            self.stalled_since = None
+            return
+        now = time.monotonic()
+        self.stalled_since = now
+        if self.choice == q.AUTO and self.auto.stall_started(now):
+            await self.step_down()
+            return
+        await asyncio.sleep(q.Auto.STALL_LONG)
+        if self.stalled_since == now and self.choice == q.AUTO and self.auto.stall_long(time.monotonic()):
+            await self.step_down()
+
+    async def step_down(self):
+        lower = [t for t in self.tiers if t.video and self.tier and t.mbps < self.tier.mbps - 0.01]
+        if not lower:
+            return
+        self.auto.cap = lower[0].mbps
+        await self.use_tier(lower[0], f'The connection can\'t keep up: {lower[0].label} (Auto)')
+
+    async def auto_up(self):
+        """Every 30 s: after a calm stretch, Auto tries one level up."""
+        while True:
+            await asyncio.sleep(30)
+            if self.choice != q.AUTO or not self.tier or self.switching:
+                continue
+            higher = [t for t in self.tiers if t.video and t.mbps > self.tier.mbps + 0.01]
+            if higher and self.auto.may_step_up(time.monotonic()):
+                self.auto.cap = higher[-1].mbps
+                await self.use_tier(higher[-1], f'Trying {higher[-1].label} (Auto)', probing=True)
 
     async def reload(self, message: str):
         self.rooms = roomlist.load(self.rooms_path)
@@ -193,24 +278,37 @@ class Player:
                     asyncio.create_task(self.make_default(*args))
                 elif msg == 'cnlv-remove' and len(args) == 2:
                     asyncio.create_task(self.remove(*args))
+                elif msg == 'cnlv-quality' and len(args) == 1:
+                    asyncio.create_task(self.set_quality(args[0]))
+            elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
+                asyncio.create_task(self.on_cache_pause(bool(ev.get('data'))))
             elif name == 'end-file' and ev.get('reason') in ('eof', 'error') and self.current and not self.switching:
                 await self.mpv.show('Stream dropped, reconnecting …', 2)
                 await asyncio.sleep(2)
                 asyncio.create_task(self.play(*self.current, quiet=True))
 
-    async def run(self, platform: str, room: str):
+    async def run(self, candidates):
+        """Open the player and play the first live room among candidates ([(platform, room)], in order)."""
         await self.mpv.start()
         events = asyncio.create_task(self._events())
+        await self.mpv.command('observe_property', 1, 'paused-for-cache')
+        stepping_up = asyncio.create_task(self.auto_up())
         try:
             await self.send_rooms()                  # before the first room, so the list is there even if it fails
-            if platform:
-                await self.play(platform, room)
-            else:
+            if not candidates:
                 await self.mpv.show('No rooms saved yet. Press Tab, then "Add a room…"', 30)
+            for i, (platform, room) in enumerate(candidates):
+                after = candidates[i + 1] if i + 1 < len(candidates) else None
+                if await self.play(platform, room, quiet=i > 0, next_room=after):
+                    break
+            else:
+                if len(candidates) > 1:
+                    await self.mpv.show('None of these rooms is live right now.\nTab: choose a room', 10)
             await asyncio.wait([events, asyncio.create_task(self.mpv.proc.wait())],
                                return_when=asyncio.FIRST_COMPLETED)
         finally:
             if self.chat_task:
                 self.chat_task.cancel()
             events.cancel()
+            stepping_up.cancel()
             await self.mpv.close()

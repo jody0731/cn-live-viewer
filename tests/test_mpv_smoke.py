@@ -40,6 +40,9 @@ class MpvSmokeTest(unittest.TestCase):
                 try:
                     rooms = {'playing': False, 'rooms': [{'platform': 'huya', 'room': '1', 'name': 'One'}]}
                     await mpv.command('set_property', 'user-data/cnlv/rooms', rooms)
+                    levels = {'auto': True, 'current': '20000', 'label': '20 Mbps',
+                              'tiers': [{'id': '20000', 'label': '20 Mbps'}, {'id': '2000', 'label': '2 Mbps'}]}
+                    await mpv.command('set_property', 'user-data/cnlv/quality', levels)
                     await mpv.command('script-message', 'cnlv-danmaku', 'hello 666')
                     await asyncio.sleep(1.5)
                     return await get(mpv, 'user-data/cnlv/chat'), await get(mpv, 'menu-data')
@@ -51,6 +54,8 @@ class MpvSmokeTest(unittest.TestCase):
             if menu is not None:                                        # older mpv has no right-click menu
                 self.assertEqual(menu[0]['title'], 'Rooms')             # picker.lua runs and read the room list
                 self.assertEqual(menu[0]['submenu'][0]['title'], 'One')
+                self.assertEqual(menu[1]['title'], 'Quality')
+                self.assertEqual([i.get('title') for i in menu[1]['submenu']], ['Auto (now 20 Mbps)', None, '20 Mbps', '2 Mbps'])
             with open(log, encoding='utf-8', errors='replace') as f:
                 text = f.read()
             for script in ('danmaku', 'picker', 'bar'):

@@ -393,3 +393,66 @@ The checks also turned up two problems, both fixed:
   appeared on screen as a 10-line dump. Streamlink errors now become "offline or not found".
 - **Traceback on quit:** quitting mpv while a room was loading printed a traceback (a write to the closed
   connection). Commands to an mpv that has closed are now ignored.
+
+### Choosing the quality, with Auto
+
+The quality can now be chosen in the player, and Auto is the default. This was the parked "adaptive bitrate" idea.
+
+**Levels:**
+- **Huya:** the room's own bitrates, which Streamlink names `hs_8000k` and so on, plus the 20 Mbps top level, each
+  as the source address with that `ratio`.
+- **Douyin:** its named qualities, labelled from each quality's `sdk_params` (bitrate, resolution) when present.
+
+**Auto** (`quality.Auto`, rules kept free of I/O so they are unit-tested):
+- **Stall signal:** mpv's `paused-for-cache` means the buffer ran dry.
+- **Step down:** when one stall lasts more than 4 s, or two stalls come within 60 s.
+- **First 15 s:** stalls at the start of a level don't count, while the buffer fills.
+- **Step up:** after 5 minutes with no stall, try one level up.
+- **Back off:** if that try stalls within 2 minutes, step down again and don't try for 20 minutes.
+
+**Switching levels:** only the video address changes (`loadfile`). The chat keeps running. A fixed choice is kept
+as a bitrate cap, so it carries over sensibly between Huya's Mbps levels and Douyin's named ones.
+
+**Menus:**
+- The control bar has a quality button: "Auto · 20 Mbps", or the fixed level. It opens a list.
+- The right-click menu has a Quality submenu.
+- Both read `user-data/cnlv/quality`, which the controller keeps current.
+
+### README screenshots
+
+The README now shows the player and the right-click menu, taken from a Douyin room Jody was watching. A first set
+was made from a demo instead, a generated picture with sample chat, to keep a streamer's face and footage out of
+the public repo. Jody preferred real screenshots.
+
+Taking them turned up two things:
+- **Tooltips:** they were about 50% wider than their text. The bar estimated text widths from character counts,
+  which runs wide for Latin text. Tooltips are now measured by libass in a hidden overlay (`compute_bounds`), as
+  mpv's console does.
+- **Audio-only level:** Douyin also lists "ao", an audio-only stream. It showed as "ao", and Auto could even step
+  down to it. It is now labelled "Audio only" and stays in the menu as a manual choice. Auto's steps and bitrate
+  caps only consider video levels.
+
+### Start order, launcher by default, one-command install
+
+**Start order.** cn-live-viewer remembers the last 10 rooms watched (`recent`, next to `rooms.conf`). Started
+without a room, it tries, until one is live:
+1. the default room;
+2. the recent rooms, newest first;
+3. the rest of the saved list in order.
+
+`rooms.start_order` builds the list, at most 8 rooms. Each failure shows "✗ … is offline, trying …". A room given
+on the command line is played alone, as before.
+
+**Launcher by default.** The launcher was only added by the install scripts. Now cn-live-viewer adds it the first
+time it plays, so pipx installs get it too. A `launcher` marker file next to `rooms.conf` records "added" or
+"removed", so a launcher removed with `desktop remove` isn't added back.
+
+**One-command install.** The install scripts also install what the system is missing, asking first (`--yes` /
+`-Yes` to skip):
+- **Linux:** checks for mpv, a Simplified Chinese font (`fc-list :lang=zh-cn`), Python 3.10+ and its venv module,
+  and installs them with apt, dnf, pacman or zypper.
+- **macOS:** mpv and Python with Homebrew.
+- **Windows:** Python and mpv (`shinchiro.mpv`) with winget. The script reads PATH again afterwards, since winget's
+  change only reaches new sessions.
+
+Both scripts run on their own (`curl … | sh`, `irm … | iex`) and install from GitHub's zip, so git isn't needed.

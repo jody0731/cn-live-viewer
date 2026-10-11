@@ -108,6 +108,43 @@ def remove(path: str, platform: str, room: str) -> None:
     _rewrite(path, platform, room)
 
 
+def recent_path(rooms_path: str) -> str:
+    """The rooms watched lately, newest first, next to the room list."""
+    return os.path.join(os.path.dirname(os.path.abspath(rooms_path)), 'recent')
+
+
+def load_recent(rooms_path: str) -> list:
+    out = []
+    try:
+        with open(recent_path(rooms_path), encoding='utf-8') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) == 2 and parts[0] in PLATFORMS:
+                    out.append((parts[0], parts[1]))
+    except OSError:
+        pass
+    return out
+
+
+def remember(rooms_path: str, platform: str, room: str, keep: int = 10) -> None:
+    """Put a room at the top of the recently watched list."""
+    recent = [(platform, room)] + [r for r in load_recent(rooms_path) if r != (platform, room)]
+    p = recent_path(rooms_path)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    _write(p, [f'{a} {b}\n' for a, b in recent[:keep]])
+
+
+def start_order(rooms: list, recent: list, limit: int = 8) -> list:
+    """The rooms to try on start, until one is live: the default room (the first saved), then the rooms watched
+    lately (newest first), then the rest of the saved list in order."""
+    order = []
+    for r in ([(rooms[0]['platform'], rooms[0]['room'])] if rooms else []) + recent + \
+             [(r['platform'], r['room']) for r in rooms]:
+        if r not in order:
+            order.append(r)
+    return order[:limit]
+
+
 def parse_target(arg: str, rooms: list):
     """A room number or link -> (platform, room). Bare numbers are Huya unless saved as a Douyin room."""
     if 'douyin.com' in arg:

@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0 (2026-10-11)
+
+- On start, an offline default room falls back to the rooms watched lately (newest first), then the rest of the
+  list; the first live one plays. The screen says which room it tries next.
+- The app launcher is added on the first start, so every install has it, pipx too. A launcher removed with
+  `cn-live-viewer desktop remove` stays removed.
+- The install scripts also install what the system is missing, asking first:
+  - Linux (apt, dnf, pacman, zypper): mpv, a Chinese font and Python's venv;
+  - macOS (Homebrew): mpv and Python;
+  - Windows (winget): Python and mpv.
+  They work without a clone (`curl … | sh`, `irm … | iex`) and no longer need git.
+- README screenshots of the player and the right-click menu.
+- Douyin's audio-only level shows as "Audio only" (it was "ao"). You can choose it, but Auto and bitrate caps never
+  pick it.
+- Tooltips are sized to their text: libass measures it, instead of an estimate that ran wide.
+- Quality choice. The new default, Auto, starts at the best level and steps down when the connection can't keep
+  up, then tries upwards again after a calm stretch. Pick a fixed level with the quality button in the control bar
+  or right-click, Quality. Huya offers 20 Mbps plus the room's own bitrates; Douyin offers its named qualities,
+  with resolution and bitrate where given. `-q` takes `auto`, a cap in Mbps (`-q 8`) or a Douyin name.
+  The old kbps form (`-q 2000`) still works.
+
 ## 0.8.1 (2026-10-11)
 
 - Windows: find mpv installed with Chocolatey (`choco install mpv`) even before it is on PATH.

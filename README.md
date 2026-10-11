@@ -11,6 +11,8 @@ cn-live-viewer 333003
 cn-live-viewer https://live.douyin.com/286658238204
 ```
 
+![cn-live-viewer playing a Douyin room: the live chat scrolling over the video, and the control bar with the seek strip, LIVE badge, room name and quality](docs/images/player.jpg)
+
 ## Features
 
 - **Huya at 20 Mbps.** That's the web player's top option, which other tools don't list. Douyin plays the
@@ -32,7 +34,7 @@ cn-live-viewer https://live.douyin.com/286658238204
 | mpv | 0.39 or newer for the room list. Older versions play and show chat but have no room list. |
 | Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux. macOS (PingFang SC) and Windows (Microsoft YaHei) have one built in. |
 
-Install the system packages first:
+The install command below installs these for you. To install them yourself instead:
 
 | System | Command |
 |---|---|
@@ -44,43 +46,42 @@ Install the system packages first:
 
 ## Install
 
+One command. It installs what your system is missing (mpv, a Chinese font for the chat, Python 3.10+), asking before
+it does, then cn-live-viewer itself, and adds **CN Live Viewer** to your apps.
+
 Linux and macOS:
 
 ```bash
-pipx install git+https://github.com/jody0731/cn-live-viewer
+curl -fsSL https://raw.githubusercontent.com/jody0731/cn-live-viewer/main/install.sh | sh
 ```
 
-From a clone, `./install.sh` does the same and adds the app launcher. Without pipx, it installs into a private
-virtual environment and links the command into `~/.local/bin`.
-
-Windows, in PowerShell from a clone:
+Windows, in PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
+irm https://raw.githubusercontent.com/jody0731/cn-live-viewer/main/install.ps1 | iex
 ```
 
-It installs into a private Python environment and adds **CN Live Viewer** to the Start menu. Git isn't needed:
-without a clone, the script fetches the latest version from GitHub.
+What they use:
+- **System packages:** apt, dnf, pacman or zypper on Linux, Homebrew on macOS, winget on Windows.
+- **No questions:** from a clone, `./install.sh --yes` or `install.ps1 -Yes` installs without asking.
+- **cn-live-viewer itself:** pipx when you have it, otherwise a private Python environment. Git isn't needed.
 
-Update with `pipx upgrade cn-live-viewer` (Windows: run `install.ps1` again). Uninstall with
-`pipx uninstall cn-live-viewer`.
+With pipx and mpv already installed, this works too: `pipx install git+https://github.com/jody0731/cn-live-viewer`.
 
-### App launcher
+To update, run the install command again (or `pipx upgrade cn-live-viewer`).
 
-```bash
-cn-live-viewer desktop
-```
+### The app
 
-This adds **CN Live Viewer**, with mpv's icon, so you can start it without a terminal:
+**CN Live Viewer** comes with mpv's icon, added on install or on the first start:
 
-| System | Where it goes |
+| System | Where it is |
 |---|---|
-| Linux | The app menu and search. You can pin it to a panel or dock, and a Huya or Douyin link dropped on it opens that room. |
+| Linux | The app menu and search. Pin it to a panel or dock. A Huya or Douyin link dropped on it opens that room. |
 | macOS | `~/Applications`, so it's in Launchpad and Spotlight |
 | Windows | The Start menu. It runs without a console window. |
 
-The installers add it for you. It opens the default room; without a terminal, chat shows only on the video. Remove
-it with `cn-live-viewer desktop remove`.
+Started from there, chat shows only on the video, as there is no terminal. `cn-live-viewer desktop remove` removes
+it for good, and `cn-live-viewer desktop` adds it back.
 
 ## Use
 
@@ -98,7 +99,7 @@ Options:
 
 | Option | Meaning |
 |---|---|
-| `-q`, `--quality` | Huya: bitrate in kbps (default 20000). Douyin: `origin` (default), `hd`, `sd`, `ld` or `md`. |
+| `-q`, `--quality` | `auto` (default), a bitrate cap in Mbps such as `8`, or for Douyin `origin`, `hd`, `sd`, `ld` or `md`. See Quality. |
 | `--no-overlay` | No chat over the video. It still prints in the terminal. |
 | `--mpv-args="..."` | Extra mpv options, e.g. `--mpv-args="--volume=50 --fs"` |
 | `--rooms FILE` | Use another room list |
@@ -125,9 +126,12 @@ With the mouse:
   - **Left:** mpv's menu ☰ (key bindings, stream info, statistics, help), play/pause, and the LIVE badge. When
     you're behind, the badge shows how far (e.g. −0:42); click it to catch up. Then the room name: click it for the
     room list.
-  - **Right:** the chat overlay, volume (click to mute, scroll to change) and fullscreen.
-- **Right-click menu:** Rooms (click one to switch), Chat overlay, Fullscreen and Quit. Right-click never pauses in
+  - **Right:** the quality (e.g. "Auto · 20 Mbps"; click to choose), the chat overlay, volume (click to mute,
+    scroll to change) and fullscreen.
+- **Right-click menu:** Rooms (click one to switch), Quality, Chat overlay, Fullscreen and Quit. Right-click never pauses in
   cn-live-viewer's window.
+
+  ![The right-click menu with the Quality submenu open on a Douyin room: Auto, then Original down to Smooth with resolution and bitrate](docs/images/menu.png)
 
 ## The room list
 
@@ -142,17 +146,33 @@ douyin      286658238204    A Douyin room
 
 - The first line is the default room, played when cn-live-viewer starts without a room. Change it in the player (Tab,
   Set the default room).
+- On start, if the default room is offline, cn-live-viewer tries the rooms you watched lately, newest first,
+  then the rest of the list, and plays the first one that's live.
 - The name is free text.
 - The room is the number in the room's address.
 - Rooms you add or save in the player are named after the streamer. Rename them in the player (Tab, Rename a room)
   or in the file.
 
-## Data use
+## Quality and data use
 
-At 20 Mbps, Huya uses about **9 GB per hour**. On a metered connection, ask for less:
+**Auto (the default)** starts at the best quality the room offers:
+- **Step down:** if the buffer runs dry for more than 4 s, or twice within a minute, Auto steps down one level.
+- **Step up:** after 5 calm minutes, it tries one level up.
+- **Backing off:** if that try stalls too, it waits 20 minutes before trying again.
+- **Notices:** every change shows on screen.
+
+To fix a level, use the quality button in the control bar or right-click, then Quality. A fixed level carries over
+to other rooms as a bitrate cap: "8 Mbps" picks the best level at or below 8 Mbps.
+
+| Site | Levels |
+|---|---|
+| Huya | 20 Mbps, plus the room's own bitrates, usually 8, 4, 2 and 0.5 Mbps |
+| Douyin | Original, HD, SD, Low and Smooth, with resolution and bitrate when the room gives them. Also Audio only, a manual choice that Auto never picks. |
+
+At 20 Mbps, Huya uses about **9 GB per hour**. On a metered connection, cap it from the start:
 
 ```bash
-cn-live-viewer 333003 -q 4000
+cn-live-viewer 333003 -q 4
 ```
 
 Douyin's original upload measured about 5 Mbps in testing, but it depends on the streamer.

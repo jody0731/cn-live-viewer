@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 
 from . import pb
+from .quality import Tier
 
 log = logging.getLogger(__name__)
 UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36'
@@ -21,7 +22,9 @@ REFERER = 'https://live.douyin.com/'
 COMMON = ('aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&cookie_enabled=true'
           '&screen_width=1920&screen_height=1080&browser_language=zh-CN&browser_platform=Linux'
           '&browser_name=Chrome&browser_version=154.0.0.0')
-QUALITIES = ('origin', 'hd', 'sd', 'ld', 'md')
+QUALITIES = ('origin', 'uhd', 'hd', 'sd', 'ld', 'md', 'ao')     # best first; ao is audio only
+NAMES = {'origin': 'Original', 'uhd': 'Ultra HD', 'hd': 'HD', 'sd': 'SD', 'ld': 'Low', 'md': 'Smooth', 'ao': 'Audio only'}
+GUESS_MBPS = {'origin': 6, 'uhd': 4, 'hd': 2.5, 'sd': 1.2, 'ld': 0.8, 'md': 0.5, 'ao': 0.1}   # when the room doesn't say
 
 
 def room_id(arg: str) -> str:
@@ -64,14 +67,30 @@ def streamer_name(rid: str):
     return owner_name(Session(rid).room())
 
 
-def stream_url(rid: str, quality: str = 'origin'):
-    """-> (FLV url, internal room id, streamer name or None). Raises LookupError when the room is not live."""
+def tier(quality: str, main: dict):
+    """One quality's level. Its sdk_params usually give the bitrate and resolution."""
+    try:
+        info = json.loads(main.get('sdk_params') or '{}')
+    except ValueError:
+        info = {}
+    rate = float(info.get('vbitrate') or 0)
+    mbps = rate / 1e6 if rate > 1e5 else rate / 1e3 if rate > 100 else GUESS_MBPS.get(quality, 1)
+    res = str(info.get('resolution') or '')
+    parts = [NAMES.get(quality, quality), f"{res.split('x')[-1]}p" if 'x' in res else '', f'{mbps:.1f} Mbps' if rate else '']
+    return Tier(quality, ' · '.join(p for p in parts if p), mbps, main['flv'], video=quality != 'ao')
+
+
+def streams(rid: str):
+    """-> (levels best first, internal room id, streamer name or None). Raises LookupError when the room is not live."""
     room = Session(rid).room()
     if room.get('status') != 2:
         raise LookupError(f'Douyin room {rid} is not live')
     data = json.loads(room['stream_url']['live_core_sdk_data']['pull_data']['stream_data'])['data']
-    q = quality if quality in data else ('origin' if 'origin' in data else next(iter(data)))
-    return data[q]['main']['flv'], room['id_str'], owner_name(room)
+    order = lambda q: QUALITIES.index(q) if q in QUALITIES else len(QUALITIES)
+    tiers = [tier(q, data[q]['main']) for q in sorted(data, key=order) if (data[q].get('main') or {}).get('flv')]
+    if not tiers:
+        raise LookupError(f'Douyin room {rid} has no stream')
+    return tiers, room['id_str'], owner_name(room)
 
 
 def parse_fetch(data: bytes):

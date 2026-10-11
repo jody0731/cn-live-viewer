@@ -28,6 +28,26 @@ def path() -> str:
     return os.path.join(base, 'applications', 'cn-live-viewer.desktop')
 
 
+def ensure(config_dir: str) -> None:
+    """Add the launcher the first time cn-live-viewer plays, so every install has it (not only the install scripts).
+    A marker file remembers that it was added, or removed with `cn-live-viewer desktop remove`, so a removed
+    launcher stays removed. Best effort: a launcher that can't be made never stops playback."""
+    marker = os.path.join(config_dir, 'launcher')
+    if os.path.exists(marker):
+        return
+    try:
+        install()
+        mark(config_dir, 'added')
+    except Exception:                                # noqa: BLE001 - e.g. no PowerShell, a read-only folder
+        pass
+
+
+def mark(config_dir: str, state: str) -> None:
+    os.makedirs(config_dir, exist_ok=True)
+    with open(os.path.join(config_dir, 'launcher'), 'w', encoding='utf-8') as f:
+        f.write(state + '\n')
+
+
 def install() -> str:
     p = path()
     os.makedirs(os.path.dirname(p), exist_ok=True)

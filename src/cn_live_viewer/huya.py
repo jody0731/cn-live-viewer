@@ -16,12 +16,13 @@ import urllib.request
 import websockets
 
 from . import tars
+from .quality import Tier
 
 log = logging.getLogger(__name__)
 UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
 REFERER = 'https://www.huya.com/'
 CHAT_WS = 'wss://cdnws.api.huya.com'
-DEFAULT_RATIO = 20000
+TOP_RATIO = 20000                  # the web player's top level (20 Mbps), which Streamlink doesn't list
 
 
 def room_id(arg: str) -> str:
@@ -41,8 +42,10 @@ def uid_from_url(url: str):
     return int(m.group(1)) if m else None
 
 
-def stream_url(room: str, ratio: int = DEFAULT_RATIO):
-    """-> (FLV url, presenter uid or None, streamer name or None). Raises LookupError when the room is offline or unknown."""
+def streams(room: str):
+    """-> (levels best first, presenter uid or None, streamer name or None). Raises LookupError when the room is
+    offline or unknown. The levels are the room's own bitrates (Streamlink's hs_8000k, al_4000k, ...) plus the 20 Mbps
+    top level; each is the source stream's address with that `ratio`."""
     from streamlink import Streamlink
     from streamlink.exceptions import StreamlinkError
     session = Streamlink()
@@ -56,8 +59,10 @@ def stream_url(room: str, ratio: int = DEFAULT_RATIO):
     s = streams.get('hs_source') or streams.get('best')
     if not s or not getattr(s, 'url', None):
         raise LookupError(f'Huya room {room} is offline or not found')
-    url = with_ratio(s.url, ratio) if ratio else s.url
-    return url, uid_from_url(url), plugin.get_author()
+    rates = {int(m.group(1)) for name in streams if (m := re.fullmatch(r'[a-z]+_(\d+)k', name))}
+    tiers = [Tier(str(r), f'{r / 1000:g} Mbps', r / 1000, with_ratio(s.url, r))
+             for r in sorted(rates | {TOP_RATIO}, reverse=True)]
+    return tiers, uid_from_url(s.url), plugin.get_author()
 
 
 def parse_room_page(html: str):

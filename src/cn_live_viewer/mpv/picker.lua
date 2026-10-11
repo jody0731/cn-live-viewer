@@ -1,13 +1,26 @@
 -- Room picker for cn-live-viewer. Tab opens the saved rooms; Enter switches to one. The entries after the rooms
 -- add a room by number or link, save the room you're watching, rename or remove a saved room, or set the default
 -- room (the first in the list, played on start). Typing filters the list.
--- It also fills mpv's right-click menu: the rooms, the chat overlay, fullscreen and quit.
+-- It also fills mpv's right-click menu: the rooms, the quality, the chat overlay, fullscreen and quit.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
 local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 0.39 or newer
 
 local rooms, playing = {}, false
 
--- the right-click menu (mpv's menu-data); rebuilt when the rooms, the chat overlay or fullscreen change
+-- the quality submenu, from cn-live-viewer's user-data/cnlv/quality: Auto, then the room's levels, best first
+local function quality_items()
+    local qd = mp.get_property_native("user-data/cnlv/quality") or {}
+    local items = { { title = qd.auto and qd.label ~= "" and ("Auto (now " .. qd.label .. ")") or "Auto",
+                      cmd = "script-message cnlv-quality auto", state = qd.auto and { "checked" } or nil } }
+    if qd.tiers and #qd.tiers > 0 then items[#items + 1] = { type = "separator" } end
+    for _, t in ipairs(qd.tiers or {}) do
+        items[#items + 1] = { title = t.label, cmd = "script-message cnlv-quality " .. t.id,
+                              state = (not qd.auto and t.id == qd.current) and { "checked" } or nil }
+    end
+    return items
+end
+
+-- the right-click menu (mpv's menu-data); rebuilt when the rooms, the quality, the chat overlay or fullscreen change
 local function update_menu()
     local room_items = {}
     for _, r in ipairs(rooms) do
@@ -19,6 +32,7 @@ local function update_menu()
     local chat = mp.get_property_native("user-data/cnlv/chat") ~= false
     mp.set_property_native("menu-data", {
         { type = "submenu", title = "Rooms", submenu = room_items },
+        { type = "submenu", title = "Quality", submenu = quality_items() },
         { title = "Chat overlay", cmd = "script-binding danmaku/cnlv-toggle-danmaku", shortcut = "C",
           state = chat and { "checked" } or nil },
         { type = "separator" },
@@ -28,6 +42,7 @@ local function update_menu()
     })
 end
 mp.observe_property("user-data/cnlv/chat", "native", update_menu)
+mp.observe_property("user-data/cnlv/quality", "native", update_menu)
 mp.observe_property("fullscreen", "bool", update_menu)
 
 -- right-click opens that menu in cn-live-viewer's window (it would otherwise pause, or do nothing)

@@ -15,6 +15,8 @@ https://<cdn>/src/<uid>-<uid>-<n>.flv?wsSecret=...&wsTime=...&ratio=20000&...
 ```
 
 - `ratio=20000` is the web player's top option (20 Mbps). Streamlink only lists streams up to about 8 Mbps.
+- The room's own bitrates come from its `vMultiStreamInfo`. Streamlink names them `<cdn>_<kbps>k`, e.g.
+  `hs_8000k`. cn-live-viewer offers those plus 20000, each as the source stream's address with that `ratio`.
 - The number after `/src/` is the streamer's id (presenter uid). It is the chat's group id, so the room page doesn't
   have to be fetched again.
 - mpv must send `Referer: https://www.huya.com/`.
@@ -81,7 +83,8 @@ From `data.data[0]`:
 - `stream_url.live_core_sdk_data.pull_data.stream_data`: a JSON string. Its `data` has one entry per quality
   (`origin`, `hd`, `sd`, `ld`, `md`), each with `main.flv` and `main.hls`.
 
-`origin` is the streamer's own upload. mpv must send `Referer: https://live.douyin.com/`.
+`origin` is the streamer's own upload. Each quality's `main.sdk_params` is a JSON string that usually holds
+`vbitrate` and `resolution`; the quality menu shows them. mpv must send `Referer: https://live.douyin.com/`.
 
 `owner.nickname` is the streamer's name, given whether the room is live or not.
 
@@ -123,6 +126,7 @@ talk through `script-message`:
 | `cnlv-rename <platform> <room> <name>` | picker.lua → controller | rename a saved room |
 | `cnlv-remove <platform> <room>` | picker.lua → controller | remove a saved room |
 | `cnlv-default <platform> <room>` | picker.lua → controller | move a saved room to the top of the list, which makes it the default |
+| `cnlv-quality <auto or level id>` | picker.lua, bar.lua → controller | choose Auto or a fixed quality level |
 
 The three scripts:
 - **danmaku.lua** draws the chat. It publishes whether the overlay is on in the property `user-data/cnlv/chat`.
@@ -132,3 +136,7 @@ The three scripts:
   so the list is there whenever the script loads.
 - **bar.lua** is the control bar. Its buttons call the other two through `script-binding picker/cnlv-picker` and
   `script-binding danmaku/cnlv-toggle-danmaku`.
+
+The controller also keeps `user-data/cnlv/quality` current: `{"auto": bool, "current": id, "label": text,
+"tiers": [{"id", "label"}]}`. The quality button and the right-click menu are built from it. It watches mpv's
+`paused-for-cache` for Auto.
