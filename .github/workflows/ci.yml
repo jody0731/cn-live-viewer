@@ -105,7 +105,7 @@ jobs:
         run: |
           exe=$(command -v cn-live-viewer || echo "$HOME/.local/bin/cn-live-viewer")
           "$exe" check
-          py=$(head -n 1 "$exe" | cut -c 3-)            # the installed copy's own Python
+          py=$(head -n 1 "$exe" | cut -c 3- | cut -d " " -f 1)   # the installed copy's own Python (pipx adds " -E")
           "$py" -m unittest tests.test_mpv_smoke -v
 
   lua:
