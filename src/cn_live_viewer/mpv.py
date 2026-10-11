@@ -14,6 +14,7 @@ LINE_LIMIT = 2 ** 20          # longest line read from mpv (asyncio's default, 6
 MPV_PLACES = {
     'darwin': ['/opt/homebrew/bin/mpv', '/usr/local/bin/mpv', '/Applications/mpv.app/Contents/MacOS/mpv'],
     'win32': [os.path.expandvars(r'%USERPROFILE%\scoop\apps\mpv\current\mpv.exe'),
+              os.path.expandvars(r'%ProgramData%\chocolatey\lib\mpvio.install\tools\mpv.exe'),   # choco install mpv
               os.path.expandvars(r'%ProgramData%\chocolatey\bin\mpv.exe'),
               os.path.expandvars(r'%ProgramFiles%\mpv\mpv.exe')],
 }

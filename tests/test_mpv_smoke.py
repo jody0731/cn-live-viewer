@@ -28,7 +28,7 @@ async def get(mpv: Mpv, prop: str):
             return msg.get('data')
 
 
-@unittest.skipUnless(HAVE_MPV, 'mpv is not installed')
+@unittest.skipUnless(HAVE_MPV or os.environ.get('CNLV_REQUIRE_MPV'), 'mpv is not installed')
 class MpvSmokeTest(unittest.TestCase):
     def test_scripts_load_and_ipc_works(self):
         with tempfile.TemporaryDirectory() as d:

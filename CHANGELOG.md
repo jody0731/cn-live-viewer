@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 (2026-10-11)
+
+- Windows: find mpv installed with Chocolatey (`choco install mpv`) even before it is on PATH.
+- CI: the mpv smoke test must run on every system; it fails instead of skipping when mpv isn't found.
+
 ## 0.8.0 (2026-10-11)
 
 - Fixed: a Huya room number with no room showed Streamlink's raw validation error on screen; it now says

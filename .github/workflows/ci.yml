@@ -51,9 +51,12 @@ jobs:
         run: brew install mpv
       - name: Install mpv (Windows)
         if: runner.os == 'Windows'
+        # choco adds mpv to PATH only for new sessions, so this also tests that cn-live-viewer finds it without PATH
         run: choco install mpv -y --no-progress
       - run: python -m pip install .
-      - name: mpv smoke test
+      - name: mpv smoke test (must run here, not skip)
+        env:
+          CNLV_REQUIRE_MPV: "1"
         run: python -m unittest tests.test_mpv_smoke -v
 
   lua:
