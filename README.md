@@ -38,7 +38,8 @@ irm https://raw.githubusercontent.com/jody0731/cn-live-viewer/main/install.ps1 |
 ```
 
 What they use:
-- **System packages:** apt, dnf, pacman or zypper on Linux, Homebrew on macOS, winget on Windows.
+- **System packages:** apt, dnf, pacman or zypper on Linux, Homebrew on macOS, winget on Windows. If winget
+  is missing or fails, the Windows script downloads mpv's official build from GitHub into its own folder instead.
 - **No questions:** from a clone, `./install.sh --yes` or `install.ps1 -Yes` installs without asking.
 - **cn-live-viewer itself:** pipx when you have it, otherwise a private Python environment. Git isn't needed.
 

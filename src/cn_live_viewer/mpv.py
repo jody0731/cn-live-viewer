@@ -18,7 +18,8 @@ MPV_PLACES = {
               os.path.expandvars(r'%ProgramData%\chocolatey\bin\mpv.exe'),
               os.path.expandvars(r'%ProgramFiles%\mpv\mpv.exe'),
               os.path.expandvars(r'%LOCALAPPDATA%\Microsoft\WinGet\Links\mpv.exe'),        # winget
-              os.path.expandvars(r'%LOCALAPPDATA%\Programs\mpv\mpv.exe')],
+              os.path.expandvars(r'%LOCALAPPDATA%\Programs\mpv\mpv.exe'),
+              os.path.expandvars(r'%LOCALAPPDATA%\cn-live-viewer\mpv\mpv.exe')],   # downloaded by install.ps1
 }
 
 

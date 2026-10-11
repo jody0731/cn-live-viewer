@@ -2,10 +2,14 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1          (add -Yes to install Python and mpv without asking)
 # or on its own:
 #   irm https://raw.githubusercontent.com/jody0731/cn-live-viewer/main/install.ps1 | iex
-# First it installs what's missing, Python 3.10+ and mpv, with winget (asking first). Then cn-live-viewer goes into
-# a private Python environment, and the app launcher into the Start menu.
+# First it installs what's missing, Python 3.10+ and mpv, with winget (asking first). If winget isn't there or
+# fails, mpv comes from its official releases on GitHub instead, into cn-live-viewer's own folder (no admin rights
+# needed). Then cn-live-viewer goes into a private Python environment, and the app launcher into the Start menu.
 param([switch]$Yes)
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'       # Windows PowerShell's download progress bar slows downloads a lot
+$home_dir = Join-Path $env:LOCALAPPDATA 'cn-live-viewer'
+$mpv_dir = Join-Path $home_dir 'mpv'          # where a downloaded mpv goes; cn-live-viewer looks here too
 
 # from this folder when it is a clone, otherwise the latest version from GitHub (a zip, so git isn't needed)
 $src = 'https://github.com/jody0731/cn-live-viewer/archive/refs/heads/main.zip'
@@ -36,6 +40,33 @@ function Find-Python {
 }
 
 $winget = Get-Command winget -ErrorAction SilentlyContinue
+if ($env:CNLV_NO_WINGET) { $winget = $null }     # CI: test the download path
+
+function Find-Mpv {
+    $onpath = Get-Command mpv -ErrorAction SilentlyContinue
+    if ($onpath) { return $onpath.Source }
+    $here = Join-Path $mpv_dir 'mpv.exe'
+    if (Test-Path $here) { return $here }
+    return $null
+}
+
+# mpv's official Windows build from its latest GitHub release (a zip), into $mpv_dir
+function Get-MpvRelease {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-w64-mingw32' }
+    $release = Invoke-RestMethod 'https://api.github.com/repos/mpv-player/mpv/releases/latest' -Headers @{ 'User-Agent' = 'cn-live-viewer' }
+    $asset = $release.assets | Where-Object { $_.name -like "*-$arch.zip" } | Select-Object -First 1
+    if (-not $asset) { throw "mpv's latest release has no $arch build" }
+    Write-Host "Downloading $($asset.name) ($([math]::Round($asset.size / 1MB)) MB) ..."
+    $zip = Join-Path $env:TEMP $asset.name
+    Invoke-WebRequest $asset.browser_download_url -OutFile $zip -UseBasicParsing
+    if (Test-Path $mpv_dir) { Remove-Item $mpv_dir -Recurse -Force }
+    Expand-Archive $zip -DestinationPath $mpv_dir -Force
+    Remove-Item $zip
+    $exe = Get-ChildItem $mpv_dir -Recurse -Filter mpv.exe | Select-Object -First 1
+    if ($exe -and $exe.DirectoryName -ne $mpv_dir) {          # the zip had a folder inside: lift its contents
+        Get-ChildItem $exe.DirectoryName | Move-Item -Destination $mpv_dir -Force
+    }
+}
 
 # ---------------------------------------------------------------- what the system needs
 
@@ -47,13 +78,18 @@ if (-not $python -and $winget -and (Ask 'Python 3.10 or newer is needed. Install
 }
 if (-not $python) { throw 'Python 3.10 or newer is needed: https://www.python.org/downloads/' }
 
-if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
+if (-not (Find-Mpv)) {
     if ($winget -and (Ask 'mpv is needed to watch. Install it with winget (shinchiro.mpv)?')) {
         winget install --id shinchiro.mpv --exact --accept-package-agreements --accept-source-agreements
         Update-SessionPath
+        if (-not (Find-Mpv)) {
+            Write-Warning ("winget couldn't install mpv. If it reported 0x80073cfc or 'Failed when searching source', " +
+                           "winget itself needs fixing: update 'App Installer' in the Microsoft Store, or run " +
+                           "'winget source reset --force' as administrator.")
+        }
     }
-    if (-not (Get-Command mpv -ErrorAction SilentlyContinue)) {
-        Write-Warning 'mpv is not installed yet. It is needed to watch: see https://mpv.io/installation/'
+    if (-not (Find-Mpv) -and (Ask "Download mpv's official Windows build from GitHub (about 40 MB) into $mpv_dir instead?")) {
+        try { Get-MpvRelease } catch { Write-Warning "Downloading mpv failed: $_" }
     }
 }
 
@@ -70,5 +106,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not install cn-live-viewer' }
 $exe = Join-Path $venv 'Scripts\cn-live-viewer.exe'
 & $exe desktop
 Write-Host ''
-Write-Host 'Installed. Start "CN Live Viewer" from the Start menu.'
+$mpv = Find-Mpv
+if ($mpv) {
+    Write-Host "Installed, with mpv at $mpv. Start `"CN Live Viewer`" from the Start menu."
+} else {
+    Write-Warning 'Installed, but mpv is still missing, so nothing will play yet. Run this again, or install mpv: https://mpv.io/installation/'
+}
 Write-Host "Command line: & '$exe' 333003   (to type just cn-live-viewer, add $(Split-Path $exe) to your PATH)"

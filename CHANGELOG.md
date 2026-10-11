@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.2 (2026-10-11)
+
+- Windows install: if winget is missing or fails (seen: 0x80073cfc, a broken winget source), `install.ps1` now
+  downloads mpv's official build from its GitHub release into cn-live-viewer's folder, where the player finds it.
+  winget failures come with the likely fix, and the end of the install says plainly if mpv is still missing.
+- CI runs the whole Windows installer and checks the installed copy finds the downloaded mpv.
+
 ## 0.10.1 (2026-10-11)
 
 - The control bar scales with the window's height again (as before 0.8.0). The chat still fits the picture.

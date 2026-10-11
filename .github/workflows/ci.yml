@@ -59,6 +59,28 @@ jobs:
           CNLV_REQUIRE_MPV: "1"
         run: python -m unittest tests.test_mpv_smoke -v
 
+  install-windows:
+    # the whole Windows installer, as a user runs it. winget is skipped so mpv comes from its GitHub release;
+    # then the installed copy must find that mpv on its own and talk to it over the named pipe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Run install.ps1
+        shell: pwsh
+        env:
+          CNLV_NO_WINGET: "1"
+        run: ./install.ps1 -Yes
+      - name: The installed copy finds the downloaded mpv
+        shell: pwsh
+        env:
+          CNLV_REQUIRE_MPV: "1"
+        run: |
+          & "$env:LOCALAPPDATA\cn-live-viewer\venv\Scripts\python.exe" -m unittest tests.test_mpv_smoke -v
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
   lua:
     runs-on: ubuntu-latest
     steps:

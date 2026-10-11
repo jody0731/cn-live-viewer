@@ -507,3 +507,24 @@ mpv's on-screen controls. It's back to that. The chat overlay keeps fitting the 
 The pre-push check of this change turned up an overlap. In a narrow window, scaled by height, the room name and the
 quality button collided: the name was shortened to one character but never dropped. Now a name that can't fit at
 all is left out (the Tab list still has it).
+
+### First real Windows install
+
+Jody ran `irm …/install.ps1 | iex` on a Windows PC:
+- **Worked:** Python was found, cn-live-viewer installed, and the Start menu entry was added.
+- **Failed:** mpv didn't install. winget failed with "Failed when searching source: winget" and 0x80073cfc ("The
+  application cannot be started"), a broken winget source on that PC rather than anything in the script.
+
+**Changes to install.ps1:**
+- **Fallback:** if winget is missing or fails, it offers to download mpv's official Windows build from mpv's latest
+  GitHub release: the x86_64 mingw zip, about 37 MB, or the ARM64 build on ARM. It goes into
+  `%LOCALAPPDATA%\cn-live-viewer\mpv`, which needs no admin rights, and `find_mpv()` looks there.
+- **winget hint:** a winget failure now names the likely fix: update App Installer from the Microsoft Store, or run
+  `winget source reset --force` as admin.
+- **Plain ending:** if mpv is still missing at the end, the installer says so, instead of a plain "Installed".
+- **Download speed:** `$ProgressPreference = 'SilentlyContinue'`, because Windows PowerShell's progress bar slows
+  `Invoke-WebRequest` a lot.
+
+**New CI job (`install-windows`):** it runs `install.ps1 -Yes` on GitHub's Windows machine with winget skipped
+(`CNLV_NO_WINGET`), so the download path runs. Then the installed copy must find that mpv by itself and pass the
+mpv smoke test over the named pipe.
