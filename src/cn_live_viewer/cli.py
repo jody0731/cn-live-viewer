@@ -1,4 +1,4 @@
-"""Command line: cn-live-viewer [room] | chat <room> | url <room> | rooms | desktop [remove]"""
+"""Command line: cn-live-viewer [room] | chat <room> | url <room> | rooms | desktop [remove] | check"""
 import argparse
 import asyncio
 import logging
@@ -7,7 +7,7 @@ import shlex
 import subprocess
 import sys
 
-from . import __version__, desktop, douyin, huya, quality, rooms as roomlist
+from . import __version__, check, desktop, douyin, huya, quality, rooms as roomlist
 from .player import Player, print_chat
 
 USAGE = """\
@@ -16,6 +16,7 @@ cn-live-viewer chat ROOM               print a room's live chat in the terminal
 cn-live-viewer url  ROOM               print the stream address (for another player)
 cn-live-viewer rooms                   list saved rooms and where the list is
 cn-live-viewer desktop [remove]        add again (or remove) the app launcher; it's added on the first start
+cn-live-viewer check                   check that mpv and everything else it needs is in place
 
 ROOM is a Huya or Douyin room number or link. Bare numbers are Huya rooms unless saved as Douyin.
 In mpv:  Tab  room list: Enter switches; the entries after the rooms add, save, rename or remove rooms
@@ -62,7 +63,10 @@ def main(argv=None):
     roomlist.ensure(a.rooms)
     rooms = roomlist.load(a.rooms)
     words = a.words
-    cmd = words[0] if words and words[0] in ('chat', 'url', 'rooms', 'desktop') else None
+    cmd = words[0] if words and words[0] in ('chat', 'url', 'rooms', 'desktop', 'check') else None
+
+    if cmd == 'check':
+        return check.run(a.rooms)
 
     if cmd == 'desktop':
         config_dir = os.path.dirname(os.path.abspath(a.rooms))

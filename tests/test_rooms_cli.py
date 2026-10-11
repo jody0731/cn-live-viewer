@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from cn_live_viewer import cli, player, rooms
+from cn_live_viewer import check, cli, player, rooms, settings
 
 
 class RoomsTest(unittest.TestCase):
@@ -118,6 +118,46 @@ class CliTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn('not a Huya/Douyin room', err)
 
+    def test_check_says_what_is_missing(self):
+        with mock.patch.object(check, 'find_mpv', side_effect=FileNotFoundError('mpv')):
+            code, out, _ = self.run_cli('check')
+        self.assertEqual(code, 1)
+        self.assertIn('MISSING  mpv', out)
+        with mock.patch.object(check, 'find_mpv', return_value='/x/mpv'), \
+                mock.patch.object(check, 'mpv_version', return_value=(0, 41)), \
+                mock.patch.object(check, 'chinese_font', return_value=True):
+            code, out, _ = self.run_cli('check')
+        self.assertEqual(code, 0, out)
+        self.assertIn('mpv 0.41 at /x/mpv', out)
+        self.assertIn('picture: Efficient', out)
+
+    def test_check_reads_mpv_versions(self):
+        for text, version in [('mpv v0.41.0 Copyright', (0, 41)), ('mpv 0.35.1 Copyright', (0, 35)),
+                              ('mpv v0.40.0-dirty Copyright', (0, 40)), ('nothing', None)]:
+            with mock.patch.object(check.subprocess, 'run', return_value=mock.Mock(stdout=text)):
+                self.assertEqual(check.mpv_version('mpv'), version, text)
+
+
+class SettingsTest(unittest.TestCase):
+    def test_defaults_save_and_bad_values(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(settings.load(d)['picture'], 'efficient')        # nothing saved yet
+            settings.save(d, picture='high')
+            self.assertEqual(settings.load(d)['picture'], 'high')
+            with open(settings.path(d), 'w', encoding='utf-8') as f:
+                f.write('{"picture": "ultra"}')
+            self.assertEqual(settings.load(d)['picture'], 'efficient')        # an unknown mode
+            with open(settings.path(d), 'w', encoding='utf-8') as f:
+                f.write('not json')
+            self.assertEqual(settings.load(d)['picture'], 'efficient')
+
+    def test_every_picture_mode_has_a_profile(self):
+        self.assertEqual(set(settings.PICTURES), set(player.PROFILES))
+        with open(player.PROFILES_FILE, encoding='utf-8') as f:
+            text = f.read()
+        for profile in player.PROFILES.values():
+            self.assertIn(f'[{profile}]', text)
+
 
 class DesktopTest(unittest.TestCase):
     """The app launcher, on whichever system runs the tests (CI covers Linux, macOS and Windows)."""
@@ -161,7 +201,7 @@ class DesktopTest(unittest.TestCase):
 
 class PackageTest(unittest.TestCase):
     def test_mpv_scripts_ship_with_the_package(self):
-        for path in player.SCRIPTS:
+        for path in player.SCRIPTS + [player.PROFILES_FILE]:
             self.assertTrue(os.path.isfile(path), path)
 
     def test_overlay_leaves_out_emoji(self):

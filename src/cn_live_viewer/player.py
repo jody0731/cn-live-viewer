@@ -9,16 +9,18 @@ import threading
 import time
 import zlib
 
-from . import douyin, huya, quality as q, rooms as roomlist
+from . import douyin, huya, quality as q, rooms as roomlist, settings
 from .mpv import Mpv
 
 log = logging.getLogger(__name__)
 SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua', 'bar.lua')]
-# smooth 60 fps on high-refresh monitors, sharper upscaling, GPU decoding, a maximized (not fullscreen) window,
-# and a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills);
-# your own mpv.conf still applies, and --mpv-args overrides these
-DEFAULT_MPV_ARGS = ['--profile=high-quality', '--hwdec=auto-safe', '--video-sync=display-resample',
-                    '--interpolation', '--tscale=oversample', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB']
+PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'mpv', 'cnlv.conf')
+PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the picture modes, in PROFILES_FILE
+# hardware decoding (the video chip uses far less power than decoding on the CPU), a maximized (not fullscreen)
+# window, a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
+# and the picture modes; your own mpv.conf still applies, and --mpv-args overrides these
+DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB',
+                    f'--include={PROFILES_FILE}']
 # Emoji: the chat font has none, so they fall back to the colour emoji font, whose glyphs are pictures, not outlines.
 # The overlay draws them as unreadable shapes, and while any are on screen video frames drop (measured: 12-55 a second
 # for each 🤡x7 message, until it scrolled off). The overlay leaves them out; the terminal still shows them.
@@ -65,7 +67,9 @@ class Player:
         self.douyin_session, self.douyin_lock = None, threading.Lock()
         self.waiting_task = None                     # waiting for an offline room to go live
         self.rooms = roomlist.load(rooms_path)
-        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + list(mpv_args or []))
+        self.config_dir = os.path.dirname(os.path.abspath(rooms_path))
+        self.picture = settings.load(self.config_dir)['picture']
+        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + [f'--profile={PROFILES[self.picture]}'] + list(mpv_args or []))
         self.current = None
         self.names = {}                              # (platform, room) -> streamer name, for rooms not saved yet
         self.chat_task = None
@@ -295,6 +299,24 @@ class Player:
                 self.auto.cap = higher[-1].mbps
                 await self.use_tier(higher[-1], f'Trying {higher[-1].label} (Auto)', probing=True)
 
+    # ---------------------------------------------------------------- picture mode
+
+    async def send_picture(self):
+        await self.mpv.command('set_property', 'user-data/cnlv/picture', self.picture)
+
+    async def set_picture(self, mode: str):
+        """From the right-click menu: 'efficient' or 'high'. Takes effect at once, and is kept for the next start."""
+        if mode not in settings.PICTURES:
+            return
+        self.picture = mode
+        await self.mpv.command('apply-profile', PROFILES[mode])
+        await self.send_picture()
+        await self.mpv.show(f'Picture: {settings.PICTURES[mode]}', 2)
+        try:
+            settings.save(self.config_dir, picture=mode)
+        except OSError as e:
+            log.warning('could not save the settings: %s', e)
+
     async def reload(self, message: str):
         self.rooms = roomlist.load(self.rooms_path)
         await self.send_rooms()
@@ -372,6 +394,8 @@ class Player:
                     asyncio.create_task(self.remove(*args))
                 elif msg == 'cnlv-quality' and len(args) == 1:
                     asyncio.create_task(self.set_quality(args[0]))
+                elif msg == 'cnlv-picture' and len(args) == 1:
+                    asyncio.create_task(self.set_picture(args[0]))
                 elif msg == 'cnlv-refresh-live':
                     asyncio.create_task(self.refresh_live())
             elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
@@ -389,6 +413,7 @@ class Player:
         stepping_up = asyncio.create_task(self.auto_up())
         live_checks = asyncio.create_task(self.live_loop())
         try:
+            await self.send_picture()
             await self.send_rooms()                  # before the first room, so the list is there even if it fails
             if len(candidates) > 1:
                 # check them all at once (and the saved rooms, for the markers), then try live rooms first

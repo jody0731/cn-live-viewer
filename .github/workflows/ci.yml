@@ -60,26 +60,53 @@ jobs:
         run: python -m unittest tests.test_mpv_smoke -v
 
   install-windows:
-    # the whole Windows installer, as a user runs it. winget is skipped so mpv comes from its GitHub release;
-    # then the installed copy must find that mpv on its own and talk to it over the named pipe
+    # the whole Windows installer as a user runs it, in Windows PowerShell 5.1 (what "PowerShell" opens on Windows),
+    # on what looks like a PC without Python or mpv: winget is skipped and the Pythons already here are ignored, so
+    # Python comes from python.org and mpv from its GitHub release. A stand-in for Windows' "Python was not found"
+    # placeholder comes first on PATH. Then the installed copy checks itself, and must find that mpv on its own and
+    # talk to it over the named pipe
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
       - name: Run install.ps1
-        shell: pwsh
+        shell: powershell
         env:
           CNLV_NO_WINGET: "1"
-        run: ./install.ps1 -Yes
+          CNLV_NO_SYSTEM_PYTHON: "1"
+        run: |
+          $stub = New-Item -ItemType Directory "$env:RUNNER_TEMP\stub"
+          Set-Content "$stub\python.bat" "@echo Python was not found; run without arguments to install from the Microsoft Store. 1>&2`r`n@exit /b 9009"
+          $env:Path = "$stub;$env:Path"
+          ./install.ps1 -Yes
       - name: The installed copy finds the downloaded mpv
-        shell: pwsh
+        shell: powershell
         env:
           CNLV_REQUIRE_MPV: "1"
         run: |
+          & "$env:LOCALAPPDATA\cn-live-viewer\venv\Scripts\cn-live-viewer.exe" check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           & "$env:LOCALAPPDATA\cn-live-viewer\venv\Scripts\python.exe" -m unittest tests.test_mpv_smoke -v
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+  install-unix:
+    # the whole Linux/macOS installer: the system packages (apt, Homebrew), cn-live-viewer, the launcher, its check
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run install.sh
+        run: sh install.sh --yes
+      - name: The installed copy checks itself and talks to mpv
+        env:
+          CNLV_REQUIRE_MPV: "1"
+        run: |
+          exe=$(command -v cn-live-viewer || echo "$HOME/.local/bin/cn-live-viewer")
+          "$exe" check
+          py=$(head -n 1 "$exe" | cut -c 3-)            # the installed copy's own Python
+          "$py" -m unittest tests.test_mpv_smoke -v
 
   lua:
     runs-on: ubuntu-latest

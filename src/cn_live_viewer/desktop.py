@@ -78,8 +78,10 @@ def remove() -> bool:
 # ---------------------------------------------------------------- Linux
 
 def command() -> str:
-    """How the launcher starts cn-live-viewer: the installed command, or this Python running the package."""
-    exe = shutil.which('cn-live-viewer')
+    """How the launcher starts cn-live-viewer: this copy's command (beside its Python, so not another copy that comes
+    first on PATH), else the one on PATH, else this Python running the package."""
+    here = os.path.join(os.path.dirname(sys.executable), 'cn-live-viewer')
+    exe = here if os.path.isfile(here) and os.access(here, os.X_OK) else shutil.which('cn-live-viewer')
     return f'"{exe}"' if exe else f'"{sys.executable}" -m cn_live_viewer'
 
 

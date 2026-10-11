@@ -533,3 +533,50 @@ mpv smoke test over the named pipe.
 another zip (`mpv-git-<date>-<commit>-x86_64.zip`). The installer unpacked only the outer one and then found no
 `mpv.exe`. It now unpacks nested zips as well, and fails loudly if `mpv.exe` still isn't there. The zip's layout was
 read from its table of contents: the last 150 KB, fetched with an HTTP range instead of the whole 37 MB.
+
+### Efficient by default, and the installers redone (0.11.0)
+
+**Resource use.** Jody's laptop, on battery, played poorly. The cause wasn't GPU decoding: decoding on the graphics
+chip's video engine is the cheap part. It was everything drawn on top. Measured on this desktop (RTX 3080, 4K 160 Hz,
+a 1080p60 15 Mbps H.264 test clip, maximized, synthetic chat at 4 messages a second, 20 s per mode, GPU board power
+against the idle desktop's 87 W):
+
+| Mode | mpv CPU (one core = 100%) | Extra GPU power | mpv memory |
+|---|---|---|---|
+| 0.10.3 (high-quality, display-resample, interpolation) | 36% | 13.7 W | 364 MB |
+| High quality (the same, as a profile) | 35% | 11.1 W | 363 MB |
+| Efficient, chat at every refresh (160/s) | 22% | 5.4 W | 351 MB |
+| Efficient, chat at 60/s | 18-20% | 3.6-5.0 W | 355 MB |
+| Efficient with `fast` (bilinear), chat at 60/s | 18% | 1.4 W | 361 MB |
+| Efficient, no chat | 10% | 3.8 W | 350 MB |
+| Efficient, CPU decoding | 62% | 3.2 W | 479 MB |
+| High quality, CPU decoding | 76% | 10.9 W | 490 MB |
+
+- **What costs what:** interpolation and display-resample redraw every display refresh, and ewa_lanczossharp is a
+  heavy scaler. The chat overlay costs about 10% of a core. CPU decoding triples mpv's CPU use and adds 130 MB.
+- **Bilinear or lanczos:** in a laptop-sized 1920x1020 window the two measured the same (0.6 and 0.9 W, noise).
+  They differ only when upscaling to a big screen, where lanczos looks clearly better. Efficient keeps mpv's
+  default lanczos.
+- **Chat rate:** capped at 60/s in Efficient. Each move of the chat redraws the whole picture, and without
+  interpolation nothing else redraws faster than the video.
+
+**The picture modes** are two profiles in `mpv/cnlv.conf`, loaded with `--include` and chosen with `--profile` at
+start or `apply-profile` while playing. A first try used `profile-restore=copy` to switch back. It worked, but
+"back" meant whatever `mpv.conf` had, and Jody's `mpv.conf` sets the same high-quality options, so Efficient would
+have looked identical there. Both profiles now set the options explicitly.
+
+**"Python was not found" on a second Windows PC.** Windows ships `python.exe` in WindowsApps as a placeholder for
+the Microsoft Store. Run, it prints "Python was not found; run without arguments to install from the Microsoft
+Store" to stderr. Windows PowerShell 5.1 turns a native program's redirected stderr into an error record, and with
+`$ErrorActionPreference = 'Stop'` that ended the installer at the very first check. CI didn't catch it because it
+ran the installer in PowerShell 7 with Python already installed.
+- **The check** runs with 'Continue' and asks Python for its own path, without double quotes in the code passed to
+  it (Windows PowerShell passes embedded quotes to programs wrongly).
+- **Where it looks:** the py launcher, `python`/`python3` on PATH, then `%LOCALAPPDATA%\Programs\Python\Python3*`
+  and `%ProgramFiles%\Python3*`, where python.org's installer puts Python without adding it to PATH.
+- **Installing:** winget (`Python.Python.3.14`, user scope), else python.org's installer for the latest 3.14,
+  found through python.org's release list, installed quietly for the user with PrependPath.
+- **CI:** the Windows install job now runs in Windows PowerShell 5.1 without setup-python, with a stand-in for the
+  Store placeholder first on PATH, and `CNLV_NO_SYSTEM_PYTHON` making the installer ignore the Pythons the runner
+  already has.
+

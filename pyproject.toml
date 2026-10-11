@@ -36,4 +36,4 @@ cn-live-viewer = "cn_live_viewer.cli:main"
 version = { attr = "cn_live_viewer.__version__" }
 
 [tool.setuptools.package-data]
-cn_live_viewer = ["mpv/*.lua"]
+cn_live_viewer = ["mpv/*.lua", "mpv/*.conf"]

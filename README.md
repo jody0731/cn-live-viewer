@@ -1,10 +1,11 @@
 # cn-live-viewer
 
 Watch [Huya](https://www.huya.com) and [Douyin](https://live.douyin.com) live rooms in [mpv](https://mpv.io):
-- no ads;
-- the highest bitrate the room offers;
-- live chat scrolling over the video;
-- switch rooms without leaving the player.
+
+- no ads
+- the highest bitrate the room offers
+- live chat scrolling over the video
+- switch rooms without leaving the player
 
 ![cn-live-viewer playing a Douyin room: the live chat scrolling over the video, and the control bar with the seek strip, LIVE badge, room name and quality](docs/images/player.jpg)
 
@@ -12,12 +13,12 @@ Watch [Huya](https://www.huya.com) and [Douyin](https://live.douyin.com) live ro
 
 - **Huya at 20 Mbps.** That's the web player's top option, which other tools don't list. Douyin plays the
   streamer's original upload.
-- **Chat over the video**, scrolling right to left in the top half of the picture, and in the terminal.
+- **Chat over the video.** It scrolls right to left in the top half of the picture, and prints in the terminal.
 - **Room list inside the player.** Press Tab, pick a room, and video and chat switch in the same window. Add, save,
   rename and remove rooms, and set the default room, from the same menu; new rooms are named after the streamer.
-- **Reconnects** by itself when a stream drops.
-- **Smooth on high-refresh monitors:** 60 fps streams are resampled to the display, so motion doesn't judder at
-  144/160/240 Hz.
+- **Reconnects by itself** when a stream drops.
+- **Light by default.** Hardware decoding and mpv's standard picture keep CPU, GPU and battery use low. The High
+  quality picture adds sharper scaling and smooth motion on 144 Hz and faster monitors (right-click, Picture).
 - **No login and no browser.** Only the public endpoints the sites' own web players use.
 
 ## Install
@@ -38,14 +39,16 @@ irm https://raw.githubusercontent.com/jody0731/cn-live-viewer/main/install.ps1 |
 ```
 
 What they use:
-- **System packages:** apt, dnf, pacman or zypper on Linux, Homebrew on macOS, winget on Windows. If winget
-  is missing or fails, the Windows script downloads mpv's official build from GitHub into its own folder instead.
-- **No questions:** from a clone, `./install.sh --yes` or `install.ps1 -Yes` installs without asking.
+
+- **System packages:** apt, dnf, pacman or zypper on Linux, and Homebrew on macOS (on a Mac without it, the script
+  offers to install Homebrew first).
+- **Windows:** winget. If winget is missing or fails, Python comes from python.org's installer (for your user only,
+  no admin rights needed) and mpv from its official build on GitHub, into cn-live-viewer's own folder.
 - **cn-live-viewer itself:** pipx when you have it, otherwise a private Python environment. Git isn't needed.
+- **A last check:** the installed copy runs `cn-live-viewer check` and lists anything still missing.
+- **No questions:** from a clone, `./install.sh --yes` or `install.ps1 -Yes` installs without asking.
 
-With pipx and mpv already installed, this works too: `pipx install git+https://github.com/jody0731/cn-live-viewer`.
-
-To update, run the install command again (or `pipx upgrade cn-live-viewer`).
+To update, run the install command again.
 
 ### The app
 
@@ -54,7 +57,7 @@ To update, run the install command again (or `pipx upgrade cn-live-viewer`).
 | System | Where it is |
 |---|---|
 | Linux | The app menu and search. Pin it to a panel or dock. A Huya or Douyin link dropped on it opens that room. |
-| macOS | `~/Applications`, so it's in Launchpad and Spotlight |
+| macOS | `~/Applications`, so it's in Launchpad and Spotlight. |
 | Windows | The Start menu. It runs without a console window. |
 
 Started from there, chat shows only on the video, as there is no terminal. `cn-live-viewer desktop remove` removes
@@ -62,14 +65,17 @@ it for good, and `cn-live-viewer desktop` adds it back.
 
 ## Requirements
 
-| | |
+| Needs | Version |
 |---|---|
-| OS | Linux, macOS or Windows. It's developed on Linux. On macOS and Windows, automated tests check that it installs, starts mpv and loads its scripts, but nobody has watched a stream there yet. |
+| OS | Linux, macOS or Windows |
 | Python | 3.10 or newer |
 | mpv | 0.39 or newer for the room list. Older versions play and show chat but have no room list. |
 | Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux. macOS (PingFang SC) and Windows (Microsoft YaHei) have one built in. |
 
-The install command above installs these for you. To install them yourself instead:
+It's developed on Linux. On macOS and Windows, automated tests install it on a fresh machine, start mpv and load its
+scripts, but nobody has watched a stream there yet.
+
+The install command above installs all of this for you. To install it yourself instead:
 
 | System | Command |
 |---|---|
@@ -77,7 +83,10 @@ The install command above installs these for you. To install them yourself inste
 | Fedora | `sudo dnf install mpv pipx google-noto-sans-cjk-fonts` (mpv comes from RPM Fusion) |
 | Arch | `sudo pacman -S mpv python-pipx noto-fonts-cjk` |
 | macOS | `brew install mpv pipx` |
-| Windows | Python from [python.org](https://www.python.org/downloads/), and mpv from [mpv.io](https://mpv.io/installation/), e.g. `scoop install extras/mpv` |
+| Windows | `winget install Python.Python.3.14 shinchiro.mpv`, or Python from [python.org](https://www.python.org/downloads/) and mpv from [mpv.io](https://mpv.io/installation/) |
+
+Then `pipx install https://github.com/jody0731/cn-live-viewer/archive/refs/heads/main.zip`, and
+`cn-live-viewer check` to see that everything is in place.
 
 ## Use
 
@@ -88,10 +97,11 @@ The install command above installs these for you. To install them yourself inste
 | `cn-live-viewer url ROOM` | Print the stream address, for another player |
 | `cn-live-viewer rooms` | List the saved rooms and show where the list is |
 | `cn-live-viewer desktop [remove]` | Add (or remove) the app launcher |
+| `cn-live-viewer check` | Check that mpv and everything else it needs is in place |
 
 ROOM is a room number or a link. A bare number is a Huya room unless it's saved as a Douyin room.
 
-Options:
+### Options
 
 | Option | Meaning |
 |---|---|
@@ -101,7 +111,7 @@ Options:
 | `--rooms FILE` | Use another room list |
 | `-v` | Log connection details |
 
-Keys in the player:
+### Keys in the player
 
 | Key | Action |
 |---|---|
@@ -113,7 +123,8 @@ Keys in the player:
 
 All of mpv's usual keys work too.
 
-With the mouse:
+### With the mouse
+
 - **Control bar:** moving the mouse shows a slim bar at the bottom, in place of mpv's own. It hides 0.5 s after
   the mouse stops. Hover anything to see what it does.
   - **Seek row:** the playback time, a strip over the part of the stream mpv has buffered, and how many seconds are
@@ -124,38 +135,37 @@ With the mouse:
     room list.
   - **Right:** the quality (e.g. "Auto · 20 Mbps"; click to choose), the chat overlay, volume (click to mute,
     scroll to change) and fullscreen.
-- **Right-click menu:** Rooms (click one to switch), Quality, Chat overlay, Fullscreen and Quit. Right-click never pauses in
-  cn-live-viewer's window.
+- **Right-click menu:** Rooms (click one to switch), Quality, Picture, Chat overlay, Fullscreen and Quit.
+  Right-click never pauses in cn-live-viewer's window.
 
-  ![The right-click menu with the Quality submenu open on a Douyin room: Auto, then Original down to Smooth with resolution and bitrate](docs/images/menu.png)
+![The right-click menu with the Quality submenu open on a Douyin room: Auto, then Original down to Smooth with resolution and bitrate](docs/images/menu.png)
 
 ## The room list
 
 `~/.config/cn-live-viewer/rooms.conf` (Windows: `%APPDATA%\cn-live-viewer\rooms.conf`), created on the first
 run. `cn-live-viewer rooms` shows where it is. One room per line:
 
-```
+```text
 # platform  room            name
 huya        333003          A Huya room
 douyin      286658238204    A Douyin room
 ```
 
-- The first line is the default room, played when cn-live-viewer starts without a room. Change it in the player (Tab,
+- **Room:** the number in the room's address.
+- **Name:** free text. Rooms you add or save in the player are named after the streamer. Rename them in the player
+  (Tab, Rename a room) or in the file.
+- **Default room:** the first line, played when cn-live-viewer starts without a room. Change it in the player (Tab,
   Set the default room).
-- On start, if the default room is offline, cn-live-viewer tries the rooms you watched lately, newest first,
+- **On start:** if the default room is offline, cn-live-viewer tries the rooms you watched lately, newest first,
   then the rest of the list, and plays the first one that's live.
-- The room lists start each room with its status: ● Live, ○ Offline, ▶ Playing (or ▶ Waiting).
-  - **Checks:** all saved rooms at once when cn-live-viewer starts, every 5 minutes, and when you open a room list,
+- **Status:** the room lists start each room with ● Live, ○ Offline, ▶ Playing (or ▶ Waiting).
+  - All saved rooms are checked at once when cn-live-viewer starts, every 5 minutes, and when you open a room list,
     reusing results under 2 minutes old. Each check is one small request per room: a few MB an hour for a handful
     of rooms, against about 9 GB an hour of video.
-  - **Open lists:** a list that is already open doesn't update until you open it again.
+  - A list that is already open doesn't update until you open it again.
 - **Offline rooms:** you can switch to one. Its chat runs, and the video starts by itself when it goes live
   (checked every 30 s).
 - **Added rooms:** a room you add is switched to straight away, or waited for if it's offline.
-- The name is free text.
-- The room is the number in the room's address.
-- Rooms you add or save in the player are named after the streamer. Rename them in the player (Tab, Rename a room)
-  or in the file.
 
 ## Quality and data use
 
@@ -181,32 +191,62 @@ cn-live-viewer 333003 -q 4
 
 Douyin's original upload measured about 5 Mbps in testing, but it depends on the streamer.
 
+## Picture and resource use
+
+Right-click, Picture, switches between two modes at once. The choice is kept for the next start.
+
+| Mode | What it does |
+|---|---|
+| **Efficient** (default) | mpv's standard picture. A new frame is drawn only when the video has one (30 or 60 a second), and the chat moves up to 60 times a second. |
+| **High quality** | Sharper upscaling (`ewa_lanczossharp`). The video is timed to the display and frames are blended in between, so 30 and 60 fps streams move smoothly at 144 Hz and up. The chat moves on every display refresh. |
+
+Both decode the video on the graphics chip's video engine (hardware decoding), which takes a fraction of the power
+the CPU would need. mpv falls back to the CPU when the chip can't decode a stream.
+
+Measured on a desktop (RTX 3080, 4K 160 Hz monitor, a 1080p60 15 Mbps video, busy chat):
+
+| | Efficient | High quality | Efficient, CPU decoding |
+|---|---|---|---|
+| mpv's CPU use (one core = 100%) | about 20% | about 35% | about 60% |
+| Extra GPU power | about 4 W | about 11 W | about 4 W |
+| mpv's memory | about 350 MB | about 360 MB | about 480 MB |
+
+The chat overlay accounts for about 10% of a core. Turn it off with C to save that.
+
+Memory grows by the rewind buffer as it fills: up to 512 MiB, about 3.5 minutes at 20 Mbps (see below). The
+cn-live-viewer program itself (Python) uses about 60 MB of memory and almost no CPU. On disk it takes about 80 MB, plus
+mpv and, on Windows, Python.
+
 ## Settings
 
 cn-live-viewer starts its own mpv with these options:
 
-```
---profile=high-quality --hwdec=auto-safe --video-sync=display-resample --interpolation --tscale=oversample --window-maximized=yes
---demuxer-max-back-bytes=512MiB
+```text
+--hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --include=<the picture modes> --profile=<the picture mode>
 ```
 
-The last one keeps up to 512 MiB of watched video in memory, so you can go back about 3.5 minutes at 20 Mbps (longer
-at lower bitrates). The memory is only used as it fills; lower it with e.g. `--mpv-args="--demuxer-max-back-bytes=128MiB"`.
-cn-live-viewer also turns off mpv's own control bar (`--osc=no`) and draws its own. These options are passed on the command
-line, so they win over the same options in your `mpv.conf`. Everything else in
-your `mpv.conf` and `input.conf` still applies. Change them with `--mpv-args`, which comes last, for example:
+- `--demuxer-max-back-bytes=512MiB` keeps up to 512 MiB of watched video in memory, so you can go back about 3.5
+  minutes at 20 Mbps (longer at lower bitrates). The memory is only used as it fills. Lower it with e.g.
+  `--mpv-args="--demuxer-max-back-bytes=128MiB"`.
+- The picture modes are in [`cnlv.conf`](src/cn_live_viewer/mpv/cnlv.conf). They set only the scaling and timing
+  options listed there. The mode you choose is kept in `settings.json`, next to the room list.
+- cn-live-viewer also turns off mpv's own control bar (`--osc=no`) and draws its own.
+
+These options are passed on the command line, so they win over the same options in your `mpv.conf`. Everything else
+in your `mpv.conf` and `input.conf` still applies. Change them with `--mpv-args`, which comes last, for example:
 
 ```bash
-cn-live-viewer --mpv-args="--no-interpolation --window-maximized=no"
+cn-live-viewer --mpv-args="--volume=50 --window-maximized=no"
 ```
 
-The chat overlay has three options:
+The chat overlay has four options:
 
 | Option | Default | Meaning |
 |---|---|---|
 | `font` | depends on the OS | Font for the chat |
 | `max_on_screen` | 60 | Most messages shown at once. Extra messages are skipped. |
-| `max_fps` | 240 | Most redraws per second. Text moves on every display refresh up to this rate. |
+| `max_fps` | 240 | Most redraws per second in the High quality picture. Text moves on every display refresh up to this rate. |
+| `efficient_fps` | 60 | Most redraws per second in the Efficient picture |
 
 Set them through `--script-opts`, prefixed with `cnlv-danmaku-`:
 
@@ -218,17 +258,26 @@ cn-live-viewer --mpv-args="--script-opts=cnlv-danmaku-max_on_screen=30,cnlv-danm
 
 ## Troubleshooting
 
+- **Something's missing, or it doesn't start:** run `cn-live-viewer check`. It lists what's in place and what's
+  missing.
 - **"offline or not found":** the room isn't live, or the number is wrong. Try the room's full link.
 - **No chat:**
   - run with `-v` to see the connection log;
   - chat and Douyin's room lookups connect directly and ignore proxy settings;
   - the video goes through mpv, which has its own `--http-proxy` option.
 - **Video stutters when chat is busy:**
-  - lower `max_on_screen`, or `max_fps` (moving text then looks less sharp);
-  - or try `--mpv-args="--no-interpolation"`;
+  - use the Efficient picture (right-click, Picture);
+  - lower `max_on_screen`;
   - C turns the overlay off to check whether it's the cause.
+- **High CPU use, a hot laptop or a short battery:**
+  - use the Efficient picture;
+  - check that hardware decoding works: Shift+I shows mpv's statistics, whose Video line names the hardware
+    decoder in use, e.g. nvdec, vaapi, d3d11va or videotoolbox. If there is none, the CPU decodes. On Linux with
+    Intel or AMD graphics, that usually means the VA-API driver is missing (`intel-media-va-driver` or
+    `mesa-va-drivers`);
+  - a lower quality (e.g. 4 Mbps) is also less work to decode.
 - **Chat shows boxes instead of characters:** install a Simplified Chinese font (see Requirements).
-- **mpv isn't found:** install it with your system's package manager.
+- **mpv isn't found:** install it with your system's package manager, or run the install command again.
 
 ## How it works
 
@@ -240,7 +289,7 @@ cn-live-viewer --mpv-args="--script-opts=cnlv-danmaku-max_on_screen=30,cnlv-danm
   - chat is polled.
 - **The player:**
   - one mpv window, controlled through its IPC socket;
-  - two small Lua scripts draw the chat and the room list.
+  - three small Lua scripts draw the chat, the room list and the control bar.
 
 The details are in [docs/PROTOCOLS.md](docs/PROTOCOLS.md). [docs/DEVLOG.md](docs/DEVLOG.md) records what was tried
 and measured.

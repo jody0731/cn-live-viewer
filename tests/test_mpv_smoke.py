@@ -35,7 +35,9 @@ class MpvSmokeTest(unittest.TestCase):
             log = os.path.join(d, 'mpv.log')
 
             async def run():
-                mpv = Mpv(player.SCRIPTS, ['--vo=null', '--ao=null', f'--log-file={log}'])
+                # the player's own options (so the picture modes' file must ship with the package), without a window
+                mpv = Mpv(player.SCRIPTS, player.DEFAULT_MPV_ARGS + ['--profile=cnlv-efficient', '--vo=null', '--ao=null',
+                                                                     f'--log-file={log}'])
                 await mpv.start()
                 try:
                     rooms = {'playing': False, 'rooms': [{'platform': 'huya', 'room': '1', 'name': 'One'},
@@ -44,19 +46,27 @@ class MpvSmokeTest(unittest.TestCase):
                     levels = {'auto': True, 'current': '20000', 'label': '20 Mbps',
                               'tiers': [{'id': '20000', 'label': '20 Mbps'}, {'id': '2000', 'label': '2 Mbps'}]}
                     await mpv.command('set_property', 'user-data/cnlv/quality', levels)
+                    await mpv.command('set_property', 'user-data/cnlv/picture', 'high')
                     await mpv.command('script-message', 'cnlv-danmaku', 'hello 666')
+                    efficient = [await get(mpv, p) for p in ('video-sync', 'interpolation')]
+                    await mpv.command('apply-profile', player.PROFILES['high'])     # switching picture modes
+                    high = [await get(mpv, p) for p in ('video-sync', 'interpolation')]
                     await asyncio.sleep(1.5)
-                    return await get(mpv, 'user-data/cnlv/chat'), await get(mpv, 'menu-data')
+                    return await get(mpv, 'user-data/cnlv/chat'), await get(mpv, 'menu-data'), efficient, high
                 finally:
                     await mpv.close()
 
-            chat, menu = asyncio.run(run())
+            chat, menu, efficient, high = asyncio.run(run())
             self.assertIs(chat, True)                                   # danmaku.lua runs
+            self.assertEqual(efficient, ['audio', False])
+            self.assertEqual(high, ['display-resample', True])
             if menu is not None:                                        # older mpv has no right-click menu
                 self.assertEqual(menu[0]['title'], 'Rooms')             # picker.lua runs and read the room list
                 self.assertEqual([i.get('title') for i in menu[0]['submenu'][:2]], ['One', '○ Offline  ·  Two'])
                 self.assertEqual(menu[1]['title'], 'Quality')
                 self.assertEqual([i.get('title') for i in menu[1]['submenu']], ['Auto (now 20 Mbps)', None, '20 Mbps', '2 Mbps'])
+                self.assertEqual(menu[2]['title'], 'Picture')
+                self.assertEqual([bool(i.get('state')) for i in menu[2]['submenu']], [False, True])   # High quality
             with open(log, encoding='utf-8', errors='replace') as f:
                 text = f.read()
             for script in ('danmaku', 'picker', 'bar'):

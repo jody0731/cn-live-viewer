@@ -6,10 +6,11 @@
 -- Cost: libass draws the overlay inside mpv's video thread, and it rasterizes each glyph (with its outline) again
 -- for every sub-pixel offset it lands on. Real chat brings new characters all the time, so text at fractional
 -- positions made video frames late. Hence positions on whole screen pixels: each glyph is drawn once, then reused.
--- Text moves on every display refresh (up to max_fps); fewer redraws make moving text look doubled and blurry.
+-- Text moves on every display refresh, up to max_fps in the High quality picture mode and efficient_fps in the
+-- Efficient one: each move redraws the whole picture, and fewer moves make moving text look doubled and blurry.
 -- Options (--script-opts=cnlv-danmaku-font=...,cnlv-danmaku-max_on_screen=...):
 
-local options = { font = "", max_on_screen = 60, max_fps = 240 }
+local options = { font = "", max_on_screen = 60, max_fps = 240, efficient_fps = 60 }
 require("mp.options").read_options(options, "cnlv-danmaku")
 
 -- a font with Simplified Chinese glyphs, so Han characters do not fall back to a Japanese-style font
@@ -49,7 +50,9 @@ mp.observe_property("osd-dimensions", "native", resize)
 local function interval()
     local d = mp.get_property_number("display-fps", 60) or 60
     if d <= 0 then d = 60 end
-    return math.ceil(d / options.max_fps) / d   -- every refresh up to max_fps, else every 2nd, 3rd, ...
+    local high = mp.get_property_native("user-data/cnlv/picture") == "high"
+    local cap = high and options.max_fps or math.min(options.max_fps, options.efficient_fps)
+    return math.ceil(d / cap) / d               -- every refresh up to the cap, else every 2nd, 3rd, ...
 end
 
 local function text_width(s)
@@ -105,10 +108,12 @@ local function add(text)
     if not timer then timer = mp.add_periodic_timer(interval(), render) end
 end
 
--- the window moved to a display with another refresh rate: restart the timer at the new rate
-mp.observe_property("display-fps", "number", function()
+-- the window moved to a display with another refresh rate, or the picture mode changed: restart the timer
+local function retime()
     if timer then timer:kill(); timer = mp.add_periodic_timer(interval(), render) end
-end)
+end
+mp.observe_property("display-fps", "number", retime)
+mp.observe_property("user-data/cnlv/picture", "native", retime)
 
 mp.register_script_message("cnlv-danmaku", add)
 mp.register_script_message("cnlv-danmaku-clear", function() items = {}; lane_free_at = {}; render() end)

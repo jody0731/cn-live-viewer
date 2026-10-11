@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.0 (2026-10-11)
+
+- **Light by default.** A new Efficient picture mode is the default: hardware decoding, mpv's standard scaling,
+  a new frame only when the video has one, and the chat moving up to 60 times a second. Measured on a 4K 160 Hz
+  desktop: about half the CPU and a third of the extra GPU power of before. The old settings (sharper upscaling,
+  frames blended to the display's refresh rate) are the High quality mode. Right-click, Picture, switches at once,
+  and the choice is kept in `settings.json`. Both modes now override the same few options in your `mpv.conf`.
+- **Windows install, redone:** "Python was not found" no longer stops it. That message comes from the Microsoft
+  Store placeholder that Windows ships as `python.exe`, and Windows PowerShell 5.1 turned it into an error that
+  ended the script. Python is now looked for in more places (the py launcher, PATH, installs that aren't on PATH)
+  and, when missing, installed with winget, or with python.org's installer for your user only if winget fails. One
+  question covers everything missing.
+- **Linux and macOS install:** finds a Python 3.10+ among versioned ones too (`python3.12` and so on), installs a
+  newer Python where the system's is older (RHEL and openSUSE Leap), skips macOS's own Python 3.9, and offers to
+  install Homebrew on a Mac without it.
+- **`cn-live-viewer check`** lists what's in place and what's missing: Python, its libraries, mpv and its version,
+  the Chinese font. The install scripts run it last.
+- The Linux launcher points at the copy that added it, not another copy that comes first on PATH.
+- CI installs from scratch on Windows (in Windows PowerShell 5.1, with Python and winget hidden), Linux and macOS.
+- README: the picture modes and measured resource use; tidier tables and lists.
+
 ## 0.10.3 (2026-10-11)
 
 - Windows install: mpv's release zip holds another zip with the program; the installer now unpacks both
