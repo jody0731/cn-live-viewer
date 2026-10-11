@@ -62,7 +62,16 @@ function Get-MpvRelease {
     if (Test-Path $mpv_dir) { Remove-Item $mpv_dir -Recurse -Force }
     Expand-Archive $zip -DestinationPath $mpv_dir -Force
     Remove-Item $zip
+    # the release zip holds another zip (mpv-git-<date>-<commit>-x86_64.zip) with the program: unpack that too
+    foreach ($round in 1..2) {
+        if (Get-ChildItem $mpv_dir -Recurse -Filter mpv.exe) { break }
+        foreach ($inner in Get-ChildItem $mpv_dir -Recurse -Filter *.zip) {
+            Expand-Archive $inner.FullName -DestinationPath $mpv_dir -Force
+            Remove-Item $inner.FullName
+        }
+    }
     $exe = Get-ChildItem $mpv_dir -Recurse -Filter mpv.exe | Select-Object -First 1
+    if (-not $exe) { throw "the download didn't contain mpv.exe" }
     if ($exe -and $exe.DirectoryName -ne $mpv_dir) {          # the zip had a folder inside: lift its contents
         Get-ChildItem $exe.DirectoryName | Move-Item -Destination $mpv_dir -Force
     }

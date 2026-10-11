@@ -528,3 +528,8 @@ Jody ran `irm …/install.ps1 | iex` on a Windows PC:
 **New CI job (`install-windows`):** it runs `install.ps1 -Yes` on GitHub's Windows machine with winget skipped
 (`CNLV_NO_WINGET`), so the download path runs. Then the installed copy must find that mpv by itself and pass the
 mpv smoke test over the named pipe.
+
+**The first CI run of it failed, usefully.** mpv's Windows release zip doesn't hold the program directly: it holds
+another zip (`mpv-git-<date>-<commit>-x86_64.zip`). The installer unpacked only the outer one and then found no
+`mpv.exe`. It now unpacks nested zips as well, and fails loudly if `mpv.exe` still isn't there. The zip's layout was
+read from its table of contents: the last 150 KB, fetched with an HTTP range instead of the whole 37 MB.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.3 (2026-10-11)
+
+- Windows install: mpv's release zip holds another zip with the program; the installer now unpacks both
+  (0.10.2 downloaded mpv but couldn't find `mpv.exe`).
+
 ## 0.10.2 (2026-10-11)
 
 - Windows install: if winget is missing or fails (seen: 0x80073cfc, a broken winget source), `install.ps1` now
