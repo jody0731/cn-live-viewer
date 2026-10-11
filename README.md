@@ -6,11 +6,6 @@ Watch [Huya](https://www.huya.com) and [Douyin](https://live.douyin.com) live ro
 - live chat scrolling over the video;
 - switch rooms without leaving the player.
 
-```
-cn-live-viewer 333003
-cn-live-viewer https://live.douyin.com/286658238204
-```
-
 ![cn-live-viewer playing a Douyin room: the live chat scrolling over the video, and the control bar with the seek strip, LIVE badge, room name and quality](docs/images/player.jpg)
 
 ## Features
@@ -24,25 +19,6 @@ cn-live-viewer https://live.douyin.com/286658238204
 - **Smooth on high-refresh monitors:** 60 fps streams are resampled to the display, so motion doesn't judder at
   144/160/240 Hz.
 - **No login and no browser.** Only the public endpoints the sites' own web players use.
-
-## Requirements
-
-| | |
-|---|---|
-| OS | Linux, macOS or Windows. It's developed on Linux. On macOS and Windows, automated tests check that it installs, starts mpv and loads its scripts, but nobody has watched a stream there yet. |
-| Python | 3.10 or newer |
-| mpv | 0.39 or newer for the room list. Older versions play and show chat but have no room list. |
-| Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux. macOS (PingFang SC) and Windows (Microsoft YaHei) have one built in. |
-
-The install command below installs these for you. To install them yourself instead:
-
-| System | Command |
-|---|---|
-| Debian, Ubuntu | `sudo apt install mpv pipx fonts-noto-cjk` |
-| Fedora | `sudo dnf install mpv pipx google-noto-sans-cjk-fonts` (mpv comes from RPM Fusion) |
-| Arch | `sudo pacman -S mpv python-pipx noto-fonts-cjk` |
-| macOS | `brew install mpv pipx` |
-| Windows | Python from [python.org](https://www.python.org/downloads/), and mpv from [mpv.io](https://mpv.io/installation/), e.g. `scoop install extras/mpv` |
 
 ## Install
 
@@ -82,6 +58,25 @@ To update, run the install command again (or `pipx upgrade cn-live-viewer`).
 
 Started from there, chat shows only on the video, as there is no terminal. `cn-live-viewer desktop remove` removes
 it for good, and `cn-live-viewer desktop` adds it back.
+
+## Requirements
+
+| | |
+|---|---|
+| OS | Linux, macOS or Windows. It's developed on Linux. On macOS and Windows, automated tests check that it installs, starts mpv and loads its scripts, but nobody has watched a stream there yet. |
+| Python | 3.10 or newer |
+| mpv | 0.39 or newer for the room list. Older versions play and show chat but have no room list. |
+| Font | A Simplified Chinese font for the chat: Noto Sans CJK SC on Linux. macOS (PingFang SC) and Windows (Microsoft YaHei) have one built in. |
+
+The install command above installs these for you. To install them yourself instead:
+
+| System | Command |
+|---|---|
+| Debian, Ubuntu | `sudo apt install mpv pipx fonts-noto-cjk` |
+| Fedora | `sudo dnf install mpv pipx google-noto-sans-cjk-fonts` (mpv comes from RPM Fusion) |
+| Arch | `sudo pacman -S mpv python-pipx noto-fonts-cjk` |
+| macOS | `brew install mpv pipx` |
+| Windows | Python from [python.org](https://www.python.org/downloads/), and mpv from [mpv.io](https://mpv.io/installation/), e.g. `scoop install extras/mpv` |
 
 ## Use
 
