@@ -129,7 +129,7 @@ class CliTest(unittest.TestCase):
             code, out, _ = self.run_cli('check')
         self.assertEqual(code, 0, out)
         self.assertIn('mpv 0.41 at /x/mpv', out)
-        self.assertIn('picture: Efficient', out)
+        self.assertIn('Video Decoder: Auto', out)
 
     def test_check_reads_mpv_versions(self):
         for text, version in [('mpv v0.41.0 Copyright', (0, 41)), ('mpv 0.35.1 Copyright', (0, 35)),
@@ -141,18 +141,25 @@ class CliTest(unittest.TestCase):
 class SettingsTest(unittest.TestCase):
     def test_defaults_save_and_bad_values(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(settings.load(d)['picture'], 'efficient')        # nothing saved yet
-            settings.save(d, picture='high')
-            self.assertEqual(settings.load(d)['picture'], 'high')
+            self.assertEqual(settings.load(d)['decoder'], 'auto')             # nothing saved yet
+            settings.save(d, decoder='high')
+            self.assertEqual(settings.load(d)['decoder'], 'high')
             with open(settings.path(d), 'w', encoding='utf-8') as f:
-                f.write('{"picture": "ultra"}')
-            self.assertEqual(settings.load(d)['picture'], 'efficient')        # an unknown mode
+                f.write('{"decoder": "ultra"}')
+            self.assertEqual(settings.load(d)['decoder'], 'auto')             # an unknown choice
             with open(settings.path(d), 'w', encoding='utf-8') as f:
                 f.write('not json')
-            self.assertEqual(settings.load(d)['picture'], 'efficient')
+            self.assertEqual(settings.load(d)['decoder'], 'auto')
 
-    def test_every_picture_mode_has_a_profile(self):
-        self.assertEqual(set(settings.PICTURES), set(player.PROFILES))
+    def test_the_old_picture_choice_carries_over(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(settings.path(d), 'w', encoding='utf-8') as f:
+                f.write('{"picture": "high"}')
+            self.assertEqual(settings.load(d)['decoder'], 'high')
+            self.assertNotIn('picture', settings.load(d))
+
+    def test_every_decoder_mode_has_a_profile(self):
+        self.assertEqual(set(settings.MODES), set(player.PROFILES))
         with open(player.PROFILES_FILE, encoding='utf-8') as f:
             text = f.read()
         for profile in player.PROFILES.values():

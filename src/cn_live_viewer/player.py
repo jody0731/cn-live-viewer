@@ -9,16 +9,16 @@ import threading
 import time
 import zlib
 
-from . import douyin, huya, quality as q, rooms as roomlist, settings
-from .mpv import Mpv
+from . import douyin, hardware, huya, quality as q, rooms as roomlist, settings
+from .mpv import WINDOWS, Mpv, find_mpv
 
 log = logging.getLogger(__name__)
 SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua', 'bar.lua')]
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'mpv', 'cnlv.conf')
-PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the picture modes, in PROFILES_FILE
+PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the Video Decoder's modes, in PROFILES_FILE
 # hardware decoding (the video chip uses far less power than decoding on the CPU), a maximized (not fullscreen)
 # window, a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
-# and the picture modes; your own mpv.conf still applies, and --mpv-args overrides these
+# and the Video Decoder's modes; your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB',
                     f'--include={PROFILES_FILE}']
 # Emoji: the chat font has none, so they fall back to the colour emoji font, whose glyphs are pictures, not outlines.
@@ -69,8 +69,16 @@ class Player:
         self.waiting_task = None                     # waiting for an offline room to go live
         self.rooms = roomlist.load(rooms_path)
         self.config_dir = os.path.dirname(os.path.abspath(rooms_path))
-        self.picture = settings.load(self.config_dir)['picture']
-        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + [f'--profile={PROFILES[self.picture]}'] + list(mpv_args or []))
+        self.decoder = settings.load(self.config_dir)['decoder']   # Auto, Efficient or High quality
+        try:
+            gpus = hardware.known_gpus(self.config_dir, find_mpv())
+        except FileNotFoundError:                    # Mpv.start() says so
+            gpus = []
+        self.gpus = gpus
+        self.gpu_for = dict(zip(('efficient', 'high'), hardware.split(gpus)))   # chips per mode, if there are two
+        self.mode, self.mode_why = self.resolve(self.decoder)
+        self.vo_alt = False                          # see use_mode()
+        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + self.mode_args(self.mode) + list(mpv_args or []))
         self.current = None
         self.names = {}                              # (platform, room) -> streamer name, for rooms not saved yet
         self.chat_task = None
@@ -351,21 +359,58 @@ class Player:
                 self.auto.cap = higher[-1].mbps
                 await self.use_tier(higher[-1], f'Trying {higher[-1].label} (Auto)', probing=True)
 
-    # ---------------------------------------------------------------- picture mode
+    # ---------------------------------------------------------------- the Video Decoder
 
-    async def send_picture(self):
-        await self.mpv.command('set_property', 'user-data/cnlv/picture', self.picture)
+    def resolve(self, decoder: str) -> tuple:
+        """-> (mode, why): a fixed mode as it is; Auto from the power source, the load and the graphics chips."""
+        if decoder != 'auto':
+            return decoder, 'chosen'
+        return hardware.auto_mode(self.gpus, hardware.on_battery(), hardware.cpu_busy())
 
-    async def set_picture(self, mode: str):
-        """From the right-click menu: 'efficient' or 'high'. Takes effect at once, and is kept for the next start."""
-        if mode not in settings.PICTURES:
-            return
-        self.picture = mode
+    def mode_args(self, mode: str) -> list:
+        args = [f'--profile={PROFILES[mode]}']
+        args += [f'--{k}={v}' for k, v in hardware.gpu_options(self.gpu_for.get(mode)).items()]
+        if self.gpu_for.get(mode) and not WINDOWS:
+            args.append('--vo=gpu-next')             # see use_mode()
+        return args
+
+    async def send_decoder(self):
+        gpu = lambda m: self.gpu_for[m].name if self.gpu_for.get(m) else None
+        await self.mpv.command('set_property', 'user-data/cnlv/decoder',
+                               {'choice': self.decoder, 'mode': self.mode, 'why': self.mode_why,
+                                'gpus': {'efficient': gpu('efficient'), 'high': gpu('high')}})
+
+    async def use_mode(self, mode: str):
+        """Switch mpv to a mode: its profile, and on a computer with two graphics chips, that mode's chip."""
+        before, self.mode = self.gpu_for.get(self.mode), mode
         await self.mpv.command('apply-profile', PROFILES[mode])
-        await self.send_picture()
-        await self.mpv.show(f'Picture: {settings.PICTURES[mode]}', 2)
+        chip = self.gpu_for.get(mode)
+        if chip != before:
+            for k, v in hardware.gpu_options(chip).items():
+                await self.mpv.command('set_property', k, v)
+            # Windows: mpv rebuilds its video output by itself when d3d11-adapter changes. Vulkan's device isn't
+            # read again until the output is rebuilt, which setting vo does, but only to a different value (mpv
+            # ignores a write of the same one): so it alternates between two lists that both mean gpu-next.
+            if not WINDOWS:
+                self.vo_alt = not self.vo_alt
+                await self.mpv.command('set_property', 'vo', 'gpu-next,gpu' if self.vo_alt else 'gpu-next')
+        await self.send_decoder()
+
+    async def set_decoder(self, decoder: str):
+        """From the right-click menu: 'auto', 'efficient' or 'high'. Takes effect at once, and is kept for the next
+        start."""
+        if decoder not in settings.DECODERS:
+            return
+        self.decoder = decoder
+        mode, self.mode_why = await asyncio.to_thread(self.resolve, decoder)
+        await self.use_mode(mode)
+        chip = self.gpu_for.get(mode)
+        text = f'Video Decoder: {settings.DECODERS[decoder]}'
+        if decoder == 'auto':
+            text += f' · {settings.MODES[mode]} ({self.mode_why})'
+        await self.mpv.show(text + (f'\n{chip.name}' if chip else ''), 3)
         try:
-            settings.save(self.config_dir, picture=mode)
+            settings.save(self.config_dir, decoder=decoder)
         except OSError as e:
             log.warning('could not save the settings: %s', e)
 
@@ -446,8 +491,8 @@ class Player:
                     asyncio.create_task(self.remove(*args))
                 elif msg == 'cnlv-quality' and len(args) == 1:
                     asyncio.create_task(self.set_quality(args[0]))
-                elif msg == 'cnlv-picture' and len(args) == 1:
-                    asyncio.create_task(self.set_picture(args[0]))
+                elif msg == 'cnlv-decoder' and len(args) == 1:
+                    asyncio.create_task(self.set_decoder(args[0]))
                 elif msg == 'cnlv-refresh-live':
                     asyncio.create_task(self.refresh_live())
             elif name in ('seek', 'playback-restart'):
@@ -459,16 +504,34 @@ class Player:
                 await asyncio.sleep(2)
                 asyncio.create_task(self.play(*self.current, quiet=True))
 
+    async def windows_taskbar(self):
+        """Windows: the taskbar button is cn-live-viewer's, so "new window" opens another cn-live-viewer (desktop.py)."""
+        from . import desktop
+        for _ in range(20):                          # the window appears shortly after mpv starts
+            hwnd = await self.mpv.get('window-id')
+            if hwnd:
+                try:
+                    await asyncio.to_thread(desktop.windows_relaunch, int(hwnd), find_mpv())
+                except Exception as e:               # noqa: BLE001 - the window still works, under mpv's button
+                    log.warning('taskbar button: %s', e)
+                return
+            await asyncio.sleep(0.5)
+
     async def run(self, candidates):
         """Open the player and play the first live room among candidates ([(platform, room)], in order)."""
         await self.mpv.start()
         events = asyncio.create_task(self._events())
+        if WINDOWS:
+            asyncio.create_task(self.windows_taskbar())
         await self.mpv.command('observe_property', 1, 'paused-for-cache')
         stepping_up = asyncio.create_task(self.auto_up())
         watching = asyncio.create_task(self.watch_flow())
         live_checks = asyncio.create_task(self.live_loop())
         try:
-            await self.send_picture()
+            await self.send_decoder()
+            chip = self.gpu_for.get(self.mode)
+            print(f'-- Video Decoder: {settings.DECODERS[self.decoder]} · {settings.MODES[self.mode]} ({self.mode_why})'
+                  + (f' on {chip.name}' if chip else ''), flush=True)
             await self.send_rooms()                  # before the first room, so the list is there even if it fails
             if len(candidates) > 1:
                 # check them all at once (and the saved rooms, for the markers), then try live rooms first

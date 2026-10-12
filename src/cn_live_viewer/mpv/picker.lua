@@ -1,7 +1,7 @@
 -- Room picker for cn-live-viewer. Tab opens the saved rooms; Enter switches to one. The entries after the rooms
 -- add a room by number or link, save the room you're watching, rename or remove a saved room, or set the default
 -- room (the first in the list, played on start). Typing filters the list.
--- It also fills mpv's right-click menu: the rooms, the quality, the picture mode, the chat overlay, fullscreen and quit.
+-- It also fills mpv's right-click menu: the rooms, the quality, the Video Decoder, the chat overlay, fullscreen and quit.
 -- cn-live-viewer looks rooms up and keeps the list file. Loaded only for cn-live-viewer's mpv sessions.
 local has_input, input = pcall(require, "mp.input")   -- input.select needs mpv 0.39 or newer
 
@@ -29,17 +29,24 @@ local function quality_items()
     return items
 end
 
--- the picture submenu: cn-live-viewer's two modes (mpv/cnlv.conf), from user-data/cnlv/picture
-local function picture_items()
-    local mode = mp.get_property_native("user-data/cnlv/picture") or "efficient"
+-- the Video Decoder submenu: Auto and cn-live-viewer's two modes (mpv/cnlv.conf), from user-data/cnlv/decoder;
+-- on a computer with two graphics chips each mode names its chip
+local MODE_TITLES = { efficient = "Efficient", high = "High quality" }
+local function decoder_items()
+    local d = mp.get_property_native("user-data/cnlv/decoder") or {}
+    local choice, gpus = d.choice or "auto", d.gpus or {}
     local function item(id, title)
-        return { title = title, cmd = "script-message cnlv-picture " .. id, state = mode == id and { "checked" } or nil }
+        return { title = title, cmd = "script-message cnlv-decoder " .. id, state = choice == id and { "checked" } or nil }
     end
-    return { item("efficient", "Efficient: less GPU and power"),
-             item("high", "High quality: sharper and smoother, more GPU and power") }
+    local function on(mode) return gpus[mode] and ("  ·  " .. gpus[mode]) or "" end
+    local auto = "Auto"
+    if choice == "auto" and d.mode then auto = auto .. ": " .. MODE_TITLES[d.mode] .. " (" .. (d.why or "") .. ")" end
+    return { item("auto", auto .. "  ·  picks at each start"),
+             item("efficient", "Efficient: less GPU and power" .. on("efficient")),
+             item("high", "High quality: sharper and smoother, more GPU and power" .. on("high")) }
 end
 
--- the right-click menu (mpv's menu-data); rebuilt when the rooms, the quality, the picture mode, the chat overlay
+-- the right-click menu (mpv's menu-data); rebuilt when the rooms, the quality, the Video Decoder, the chat overlay
 -- or fullscreen change
 local function update_menu()
     local room_items = {}
@@ -54,7 +61,7 @@ local function update_menu()
     mp.set_property_native("menu-data", {
         { type = "submenu", title = "Rooms", submenu = room_items },
         { type = "submenu", title = "Quality", submenu = quality_items() },
-        { type = "submenu", title = "Picture", submenu = picture_items() },
+        { type = "submenu", title = "Video Decoder", submenu = decoder_items() },
         { title = "Chat overlay", cmd = "script-binding danmaku/cnlv-toggle-danmaku", shortcut = "C",
           state = chat and { "checked" } or nil },
         { type = "separator" },
@@ -65,7 +72,7 @@ local function update_menu()
 end
 mp.observe_property("user-data/cnlv/chat", "native", update_menu)
 mp.observe_property("user-data/cnlv/quality", "native", update_menu)
-mp.observe_property("user-data/cnlv/picture", "native", update_menu)
+mp.observe_property("user-data/cnlv/decoder", "native", update_menu)
 mp.observe_property("fullscreen", "bool", update_menu)
 
 -- right-click opens that menu in cn-live-viewer's window (it would otherwise pause, or do nothing)

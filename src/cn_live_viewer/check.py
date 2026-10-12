@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import sys
 
-from . import __version__, desktop, settings
+from . import __version__, desktop, hardware, settings
 from .mpv import find_mpv
 
 MIN_MPV = (0, 39)          # the room list and the quality list (mp.input); older mpv plays, without them
@@ -49,6 +49,7 @@ def run(rooms_path: str) -> int:
     try:
         mpv = find_mpv()
     except FileNotFoundError:
+        mpv = None
         ready = False
         print('  MISSING  mpv: install it (the install script does, or see https://mpv.io/installation/)')
     else:
@@ -65,8 +66,14 @@ def run(rooms_path: str) -> int:
     elif font:
         print('  ok       a Simplified Chinese font for the chat')
     config_dir = os.path.dirname(os.path.abspath(rooms_path))
-    picture = settings.load(config_dir)['picture']
-    print(f'  ok       picture: {settings.PICTURES[picture]} (right-click, Picture, to change)')
+    gpus = hardware.known_gpus(config_dir, mpv, refresh=True) if mpv else []
+    for g in gpus:
+        print(f'  ok       graphics: {g.name} ({"separate" if g.discrete else "built-in"})')
+    efficient, high = hardware.split(gpus)
+    if efficient:
+        print(f'  ok       two graphics chips: Efficient runs on {efficient.name}, High quality on {high.name}')
+    decoder = settings.load(config_dir)['decoder']
+    print(f'  ok       Video Decoder: {settings.DECODERS[decoder]} (right-click, Video Decoder, to change)')
     print(f'  ok       room list: {rooms_path}')
     launcher = desktop.path()
     print(f'  {"ok      " if os.path.exists(launcher) else "none    "} app launcher: {launcher}')

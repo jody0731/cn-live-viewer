@@ -17,8 +17,10 @@ Watch [Huya](https://www.huya.com) and [Douyin](https://live.douyin.com) live ro
 - **Room list inside the player.** Press Tab, pick a room, and video and chat switch in the same window. Add, save,
   rename and remove rooms, and set the default room, from the same menu; new rooms are named after the streamer.
 - **Reconnects by itself** when a stream drops.
-- **Light by default.** Hardware decoding and mpv's standard picture keep CPU, GPU and battery use low. The High
-  quality picture adds sharper scaling and smooth motion on 144 Hz and faster monitors (right-click, Picture).
+- **Video Decoder that fits the computer.** Auto picks at each start: Efficient on battery, on a busy computer or
+  with built-in graphics; High quality (sharper scaling, smooth motion on 144 Hz and faster monitors) on mains power
+  with a separate graphics card. On laptops with two graphics chips, each mode runs on its own chip.
+- **Several windows at once.** Start it again, or use "new window" on its taskbar button, to watch two rooms.
 - **No login and no browser.** Only the public endpoints the sites' own web players use.
 
 ## Install
@@ -135,7 +137,7 @@ All of mpv's usual keys work too.
     room list.
   - **Right:** the quality (e.g. "Auto · 20 Mbps"; click to choose), the chat overlay, volume (click to mute,
     scroll to change) and fullscreen.
-- **Right-click menu:** Rooms (click one to switch), Quality, Picture, Chat overlay, Fullscreen and Quit.
+- **Right-click menu:** Rooms (click one to switch), Quality, Video Decoder, Chat overlay, Fullscreen and Quit.
   Right-click never pauses in cn-live-viewer's window.
 
 ![The right-click menu with the Quality submenu open on a Douyin room: Auto, then Original down to Smooth with resolution and bitrate](docs/images/menu.png)
@@ -194,14 +196,20 @@ cn-live-viewer 333003 -q 4
 
 Douyin's original upload measured about 5 Mbps in testing, but it depends on the streamer.
 
-## Picture and resource use
+## Video Decoder and resource use
 
-Right-click, Picture, switches between two modes at once. The choice is kept for the next start.
+Right-click, Video Decoder, switches at once. The choice is kept for the next start.
 
-| Mode | What it does |
+| Choice | What it does |
 |---|---|
-| **Efficient** (default) | mpv's standard picture. A new frame is drawn only when the video has one (30 or 60 a second), and the chat moves up to 60 times a second. |
-| **High quality** | Sharper upscaling (`ewa_lanczossharp`). The video is timed to the display and frames are blended in between, so 30 and 60 fps streams move smoothly at 144 Hz and up. The chat moves on every display refresh. |
+| **Auto** (default) | Picks one of the two modes at each start. Efficient on battery, when the CPU is already busy (over 70%), or with only built-in graphics. High quality on mains power with a separate graphics card, and on Macs. |
+| **Efficient** | mpv's standard picture. A new frame is drawn only when the video has one (30 or 60 a second), and the chat moves up to 60 times a second. |
+| **High quality** | Sharper upscaling (`ewa_lanczossharp`). The video is timed to the display and frames are blended in between, so 30 and 60 fps streams move smoothly at 144 Hz and up. The chat moves up to 120 times a second. |
+
+**Two graphics chips** (most gaming laptops: a built-in Intel or AMD chip and a separate NVIDIA or AMD one):
+Efficient runs on the built-in chip and High quality on the separate one, so High quality doesn't stutter on the
+weak chip and Efficient doesn't wake the strong one. With one chip, the two modes are only different settings. The
+chips are detected once per install or update (`cn-live-viewer check` shows them); macOS picks its chip by itself.
 
 Both decode the video on the graphics chip's video engine (hardware decoding), which takes a fraction of the power
 the CPU would need. mpv falls back to the CPU when the chip can't decode a stream.
@@ -225,14 +233,16 @@ mpv and, on Windows, Python.
 cn-live-viewer starts its own mpv with these options:
 
 ```text
---hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --include=<the picture modes> --profile=<the picture mode>
+--hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --include=<the Video Decoder modes> --profile=<the mode>
 ```
 
 - `--demuxer-max-back-bytes=512MiB` keeps up to 512 MiB of watched video in memory, so you can go back about 3.5
   minutes at 20 Mbps (longer at lower bitrates). The memory is only used as it fills. Lower it with e.g.
   `--mpv-args="--demuxer-max-back-bytes=128MiB"`.
-- The picture modes are in [`cnlv.conf`](src/cn_live_viewer/mpv/cnlv.conf). They set only the scaling and timing
-  options listed there. The mode you choose is kept in `settings.json`, next to the room list.
+- The Video Decoder's modes are in [`cnlv.conf`](src/cn_live_viewer/mpv/cnlv.conf). They set only the scaling and
+  timing options listed there. On a computer with two graphics chips, cn-live-viewer also names the chip:
+  `--d3d11-adapter` on Windows, `--gpu-api=vulkan --vulkan-device` (and `--vo=gpu-next`) elsewhere. Your choice and
+  the detected chips are kept in `settings.json`, next to the room list.
 - cn-live-viewer also turns off mpv's own control bar (`--osc=no`) and draws its own.
 
 These options are passed on the command line, so they win over the same options in your `mpv.conf`. Everything else
@@ -247,9 +257,11 @@ The chat overlay has four options:
 | Option | Default | Meaning |
 |---|---|---|
 | `font` | depends on the OS | Font for the chat |
-| `max_on_screen` | 60 | Most messages shown at once. Extra messages are skipped. |
-| `max_fps` | 240 | Most redraws per second in the High quality picture. Text moves on every display refresh up to this rate. |
-| `efficient_fps` | 60 | Most redraws per second in the Efficient picture |
+| `max_on_screen` | 100 | Most messages shown at once. Extra messages are skipped. |
+| `max_fps` | 120 | Most redraws per second in High quality. Text moves on every display refresh up to this rate. |
+| `efficient_fps` | 60 | Most redraws per second in Efficient |
+
+Messages take 18 seconds to cross the screen: slow enough that each redraw moves them only a couple of pixels.
 
 Set them through `--script-opts`, prefixed with `cnlv-danmaku-`:
 
@@ -269,11 +281,11 @@ cn-live-viewer --mpv-args="--script-opts=cnlv-danmaku-max_on_screen=30,cnlv-danm
   - chat and Douyin's room lookups connect directly and ignore proxy settings;
   - the video goes through mpv, which has its own `--http-proxy` option.
 - **Video stutters when chat is busy:**
-  - use the Efficient picture (right-click, Picture);
+  - use Efficient (right-click, Video Decoder);
   - lower `max_on_screen`;
   - C turns the overlay off to check whether it's the cause.
 - **High CPU use, a hot laptop or a short battery:**
-  - use the Efficient picture;
+  - use Efficient (Auto picks it on battery);
   - check that hardware decoding works: Shift+I shows mpv's statistics, whose Video line names the hardware
     decoder in use, e.g. nvdec, vaapi, d3d11va or videotoolbox. If there is none, the CPU decodes. On Linux with
     Intel or AMD graphics, that usually means the VA-API driver is missing (`intel-media-va-driver` or

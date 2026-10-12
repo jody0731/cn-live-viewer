@@ -6,11 +6,11 @@
 -- Cost: libass draws the overlay inside mpv's video thread, and it rasterizes each glyph (with its outline) again
 -- for every sub-pixel offset it lands on. Real chat brings new characters all the time, so text at fractional
 -- positions made video frames late. Hence positions on whole screen pixels: each glyph is drawn once, then reused.
--- Text moves on every display refresh, up to max_fps in the High quality picture mode and efficient_fps in the
--- Efficient one: each move redraws the whole picture, and fewer moves make moving text look doubled and blurry.
+-- Text moves on every display refresh, up to max_fps in the Video Decoder's High quality mode and efficient_fps in
+-- Efficient: each move redraws the whole picture, and fewer moves make moving text look doubled and blurry.
 -- Options (--script-opts=cnlv-danmaku-font=...,cnlv-danmaku-max_on_screen=...):
 
-local options = { font = "", max_on_screen = 60, max_fps = 240, efficient_fps = 60 }
+local options = { font = "", max_on_screen = 100, max_fps = 120, efficient_fps = 60 }
 require("mp.options").read_options(options, "cnlv-danmaku")
 
 -- a font with Simplified Chinese glyphs, so Han characters do not fall back to a Japanese-style font
@@ -23,7 +23,8 @@ local FONT_SIZE = 32
 local LANES = 14                        -- rows at most, from the top of the picture (about its upper half)
 local LANE_H = 38
 local TOP = 14
-local DURATION = 9                      -- seconds to cross the screen
+local DURATION = 18                     -- seconds to cross the screen: slow, so each redraw moves text only a
+                                        -- couple of pixels and it glides instead of jumping
 
 local enabled = true
 local items = {}                        -- {text, t0, lane, w, speed}; w and speed in 1080-high units
@@ -50,7 +51,7 @@ mp.observe_property("osd-dimensions", "native", resize)
 local function interval()
     local d = mp.get_property_number("display-fps", 60) or 60
     if d <= 0 then d = 60 end
-    local high = mp.get_property_native("user-data/cnlv/picture") == "high"
+    local high = (mp.get_property_native("user-data/cnlv/decoder") or {}).mode == "high"
     local cap = high and options.max_fps or math.min(options.max_fps, options.efficient_fps)
     return math.ceil(d / cap) / d               -- every refresh up to the cap, else every 2nd, 3rd, ...
 end
@@ -108,12 +109,12 @@ local function add(text)
     if not timer then timer = mp.add_periodic_timer(interval(), render) end
 end
 
--- the window moved to a display with another refresh rate, or the picture mode changed: restart the timer
+-- the window moved to a display with another refresh rate, or the Video Decoder's mode changed: restart the timer
 local function retime()
     if timer then timer:kill(); timer = mp.add_periodic_timer(interval(), render) end
 end
 mp.observe_property("display-fps", "number", retime)
-mp.observe_property("user-data/cnlv/picture", "native", retime)
+mp.observe_property("user-data/cnlv/decoder", "native", retime)
 
 mp.register_script_message("cnlv-danmaku", add)
 mp.register_script_message("cnlv-danmaku-clear", function() items = {}; lane_free_at = {}; render() end)

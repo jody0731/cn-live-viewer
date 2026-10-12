@@ -7,6 +7,16 @@
   when the stream arrives slower than real time, and a picture racing ahead of or drifting from the sound is put
   back in step at once.
 - Switching rooms quickly could play an earlier choice after the later one, when its lookup finished last.
+- **Video Decoder** replaces Picture (right-click). New default **Auto** picks a mode at each start: Efficient on
+  battery, on a busy computer or with only built-in graphics; High quality on mains power with a separate graphics
+  card. On computers with two graphics chips (most gaming laptops), Efficient runs on the built-in chip and High
+  quality on the separate one, switching at once; before, both ran wherever the system put mpv, often the weak chip,
+  and High quality stuttered there. The chips are detected once per install or update; `cn-live-viewer check` lists
+  them. A Picture choice made in 0.11 is kept.
+- **Calmer chat:** messages cross the screen in 18 s instead of 9, so each redraw moves them half as far and they
+  glide. High quality redraws the chat up to 120 times a second (was 240); up to 100 messages show at once (was 60).
+- **Several windows:** on Windows, the player's taskbar button is now cn-live-viewer's own, so "new window" and
+  pinning start cn-live-viewer again (they started a bare mpv).
 
 ## 0.11.0 (2026-10-11)
 

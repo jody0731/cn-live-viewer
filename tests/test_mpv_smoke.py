@@ -35,7 +35,7 @@ class MpvSmokeTest(unittest.TestCase):
             log = os.path.join(d, 'mpv.log')
 
             async def run():
-                # the player's own options (so the picture modes' file must ship with the package), without a window
+                # the player's own options (so the Video Decoder's modes file must ship with the package), without a window
                 mpv = Mpv(player.SCRIPTS, player.DEFAULT_MPV_ARGS + ['--profile=cnlv-efficient', '--vo=null', '--ao=null',
                                                                      f'--log-file={log}'])
                 await mpv.start()
@@ -46,10 +46,11 @@ class MpvSmokeTest(unittest.TestCase):
                     levels = {'auto': True, 'current': '20000', 'label': '20 Mbps',
                               'tiers': [{'id': '20000', 'label': '20 Mbps'}, {'id': '2000', 'label': '2 Mbps'}]}
                     await mpv.command('set_property', 'user-data/cnlv/quality', levels)
-                    await mpv.command('set_property', 'user-data/cnlv/picture', 'high')
+                    await mpv.command('set_property', 'user-data/cnlv/decoder',
+                                      {'choice': 'high', 'mode': 'high', 'why': 'chosen', 'gpus': {}})
                     await mpv.command('script-message', 'cnlv-danmaku', 'hello 666')
                     efficient = [await get(mpv, p) for p in ('video-sync', 'interpolation')]
-                    await mpv.command('apply-profile', player.PROFILES['high'])     # switching picture modes
+                    await mpv.command('apply-profile', player.PROFILES['high'])     # switching the Video Decoder's modes
                     high = [await get(mpv, p) for p in ('video-sync', 'interpolation')]
                     await asyncio.sleep(1.5)
                     return await get(mpv, 'user-data/cnlv/chat'), await get(mpv, 'menu-data'), efficient, high
@@ -65,8 +66,8 @@ class MpvSmokeTest(unittest.TestCase):
                 self.assertEqual([i.get('title') for i in menu[0]['submenu'][:2]], ['One', '○ Offline  ·  Two'])
                 self.assertEqual(menu[1]['title'], 'Quality')
                 self.assertEqual([i.get('title') for i in menu[1]['submenu']], ['Auto (now 20 Mbps)', None, '20 Mbps', '2 Mbps'])
-                self.assertEqual(menu[2]['title'], 'Picture')
-                self.assertEqual([bool(i.get('state')) for i in menu[2]['submenu']], [False, True])   # High quality
+                self.assertEqual(menu[2]['title'], 'Video Decoder')
+                self.assertEqual([bool(i.get('state')) for i in menu[2]['submenu']], [False, False, True])   # High quality
             with open(log, encoding='utf-8', errors='replace') as f:
                 text = f.read()
             for script in ('danmaku', 'picker', 'bar'):

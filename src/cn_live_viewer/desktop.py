@@ -145,11 +145,74 @@ def _mac_app(bundle: str) -> None:
 
 # ---------------------------------------------------------------- Windows
 
-def _windows_shortcut(lnk: str) -> None:
+APP_USER_MODEL_ID = 'jody0731.CNLiveViewer'
+
+
+def _windows_target() -> str:
     # pythonw.exe runs without a console window (python.exe would open one)
-    folder = os.path.dirname(sys.executable)
-    pythonw = os.path.join(folder, 'pythonw.exe')
-    target = pythonw if os.path.exists(pythonw) else sys.executable
+    pythonw = os.path.join(os.path.dirname(sys.executable), 'pythonw.exe')
+    return pythonw if os.path.exists(pythonw) else sys.executable
+
+
+def windows_relaunch(hwnd: int, mpv: str) -> None:
+    """Make the taskbar treat mpv's window as cn-live-viewer's: its own button (not mpv's), and "new window" and
+    pinning start cn-live-viewer again, a second window beside the first, not a bare mpv. Windows reads this from the
+    window's property store (System.AppUserModel.ID and the Relaunch* keys), which another process may set.
+    Raises OSError when Windows refuses."""
+    import ctypes
+    import uuid
+    from ctypes import wintypes
+
+    class GUID(ctypes.Structure):
+        _fields_ = [('raw', ctypes.c_ubyte * 16)]
+
+    class PROPERTYKEY(ctypes.Structure):
+        _fields_ = [('fmtid', GUID), ('pid', wintypes.DWORD)]
+
+    class PROPVARIANT(ctypes.Structure):
+        _fields_ = [('vt', ctypes.c_ushort), ('r1', ctypes.c_ushort), ('r2', ctypes.c_ushort), ('r3', ctypes.c_ushort),
+                    ('value', ctypes.c_void_p), ('extra', ctypes.c_void_p)]
+
+    def guid(text):
+        g = GUID()
+        ctypes.memmove(g.raw, uuid.UUID(text).bytes_le, 16)
+        return g
+
+    APPID_KEYS = '9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3'      # PKEY_AppUserModel_*
+    VT_LPWSTR = 31
+    ole32, shell32 = ctypes.windll.ole32, ctypes.windll.shell32
+    ole32.CoInitializeEx(None, 2)                    # COINIT_APARTMENTTHREADED, on this (worker) thread
+    store = ctypes.c_void_p()
+    try:
+        hr = shell32.SHGetPropertyStoreForWindow(wintypes.HWND(hwnd), ctypes.byref(guid('886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99')),
+                                                 ctypes.byref(store))
+        if hr != 0 or not store:
+            raise OSError(f'SHGetPropertyStoreForWindow failed: {hr & 0xFFFFFFFF:#x}')
+        vtbl = ctypes.cast(store, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+        set_value = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(PROPERTYKEY),
+                                       ctypes.POINTER(PROPVARIANT))(vtbl[6])        # IPropertyStore::SetValue
+        commit = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtbl[7])
+        release = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtbl[2])
+        keep = []                                    # the strings must outlive the calls
+        # the ID last: Windows reads the Relaunch* keys when the ID is set
+        for pid, value in ((2, f'"{_windows_target()}" -m cn_live_viewer --launcher'),   # RelaunchCommand
+                           (3, f'{mpv},0'),                                                # RelaunchIconResource
+                           (4, NAME),                                                      # RelaunchDisplayNameResource
+                           (5, APP_USER_MODEL_ID)):                                        # ID
+            text = ctypes.create_unicode_buffer(value)
+            keep.append(text)
+            pv = PROPVARIANT(vt=VT_LPWSTR, value=ctypes.cast(text, ctypes.c_void_p))
+            hr = set_value(store, ctypes.byref(PROPERTYKEY(guid(APPID_KEYS), pid)), ctypes.byref(pv))
+            if hr != 0:
+                raise OSError(f'setting taskbar property {pid} failed: {hr & 0xFFFFFFFF:#x}')
+        commit(store)
+        release(store)
+    finally:
+        ole32.CoUninitialize()
+
+
+def _windows_shortcut(lnk: str) -> None:
+    target = _windows_target()
     try:
         icon = find_mpv()
     except FileNotFoundError:

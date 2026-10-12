@@ -2,8 +2,10 @@
 import json
 import os
 
-PICTURES = {'efficient': 'Efficient', 'high': 'High quality'}   # picture modes: mpv/cnlv.conf has their profiles
-DEFAULTS = {'picture': 'efficient'}
+# the Video Decoder: Auto picks one of the two modes at each start (hardware.auto_mode); mpv/cnlv.conf has their profiles
+MODES = {'efficient': 'Efficient', 'high': 'High quality'}
+DECODERS = dict(auto='Auto', **MODES)
+DEFAULTS = {'decoder': 'auto'}
 
 
 def path(config_dir: str) -> str:
@@ -17,9 +19,13 @@ def load(config_dir: str) -> dict:
             data = json.load(f)
     except (OSError, ValueError):
         data = {}
-    out = dict(DEFAULTS, **(data if isinstance(data, dict) else {}))
-    if out['picture'] not in PICTURES:
-        out['picture'] = DEFAULTS['picture']
+    data = data if isinstance(data, dict) else {}
+    if 'decoder' not in data and data.get('picture') in MODES:
+        data['decoder'] = data['picture']            # 0.11's "Picture" choice, made by hand: kept
+    data.pop('picture', None)
+    out = dict(DEFAULTS, **data)
+    if out['decoder'] not in DECODERS:
+        out['decoder'] = DEFAULTS['decoder']
     return out
 
 
