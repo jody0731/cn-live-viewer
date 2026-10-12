@@ -6,7 +6,9 @@ import os
 MODES = {'efficient': 'Efficient', 'high': 'High quality'}
 DECODERS = dict(auto='Auto', **MODES)
 # what you set in the player and get back at the next start; Auto choices (quality, Video Decoder) are kept as Auto
-DEFAULTS = {'decoder': 'auto', 'quality': 'auto', 'volume': 50, 'mute': False, 'chat': True}
+DEFAULTS = {'decoder': 'auto', 'quality': 'auto', 'volume': 50, 'mute': False, 'chat': True,
+            # the window: fullscreen, maximized, and the size it has when it's neither (% of the screen; None: mpv's)
+            'window': {'fullscreen': False, 'maximized': True, 'size': None}}
 
 
 def path(config_dir: str) -> str:
@@ -34,6 +36,21 @@ def load(config_dir: str) -> dict:
     for key in ('mute', 'chat'):
         if not isinstance(out[key], bool):
             out[key] = DEFAULTS[key]
+    out['window'] = window(out['window'])
+    return out
+
+
+def window(w) -> dict:
+    """The window settings, each one checked (a bad one gets its default)."""
+    w = w if isinstance(w, dict) else {}
+    out = dict(DEFAULTS['window'])
+    for key in ('fullscreen', 'maximized'):
+        if isinstance(w.get(key), bool):
+            out[key] = w[key]
+    size = w.get('size')
+    if (isinstance(size, list) and len(size) == 2
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool) and 10 <= v <= 100 for v in size)):
+        out['size'] = size
     return out
 
 

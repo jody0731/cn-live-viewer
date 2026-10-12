@@ -16,10 +16,10 @@ log = logging.getLogger(__name__)
 SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.lua', 'picker.lua', 'bar.lua')]
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'mpv', 'cnlv.conf')
 PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the Video Decoder's modes, in PROFILES_FILE
-# hardware decoding (the video chip uses far less power than decoding on the CPU), a maximized (not fullscreen)
-# window, the volume and mute kept from the last start, a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
+# hardware decoding (the video chip uses far less power than decoding on the CPU), the window, volume and mute kept
+# from the last start (window_args), a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
 # and the Video Decoder's modes; your own mpv.conf still applies, and --mpv-args overrides these
-DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB',
+DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--demuxer-max-back-bytes=512MiB',
                     f'--include={PROFILES_FILE}']
 # Emoji: the chat font has none, so they fall back to the colour emoji font, whose glyphs are pictures, not outlines.
 # The overlay draws them as unreadable shapes, and while any are on screen video frames drop (measured: 12-55 a second
@@ -39,6 +39,31 @@ def print_chat(nick: str, text: str, color: bool) -> None:
         print(f'{c}{nick}\033[0m: {text}', flush=True)
     else:
         print(f'{nick}: {text}', flush=True)
+
+
+WINDOW_PROPS = ('fullscreen', 'window-maximized', 'osd-dimensions', 'display-width', 'display-height')
+
+
+def window_args(w: dict) -> list:
+    """mpv options for the window as it was last time (settings.window): fullscreen, maximized (the first start), or
+    the size it had, as a share of the screen so it's the same on any screen scale."""
+    args = [f'--window-maximized={"yes" if w["maximized"] else "no"}']
+    if w['size']:
+        args.append(f'--geometry={w["size"][0]:g}%x{w["size"][1]:g}%')
+    if w['fullscreen']:
+        args.append('--fullscreen=yes')
+    return args
+
+
+def window_state(props: dict, before: dict) -> dict:
+    """The window settings from mpv's properties; the size only from a window that is neither fullscreen nor
+    maximized (else the last such size stays)."""
+    w = dict(before, fullscreen=bool(props.get('fullscreen')), maximized=bool(props.get('window-maximized')))
+    osd, dw, dh = props.get('osd-dimensions') or {}, props.get('display-width'), props.get('display-height')
+    if not w['fullscreen'] and not w['maximized'] and osd.get('w') and osd.get('h') and dw and dh:
+        size = [round(min(100, max(10, 100 * osd['w'] / dw)), 1), round(min(100, max(10, 100 * osd['h'] / dh)), 1)]
+        w['size'] = size
+    return w
 
 
 def levels(platform: str, room: str):
@@ -73,7 +98,8 @@ class Player:
         # AUTO, a cap in Mbps, or a Douyin quality name: -q for this start only, else the last one chosen in the player
         self.choice = q.parse(quality if quality is not None else saved['quality'])
         self.chat_on = saved['chat']
-        self.kept = {k: saved[k] for k in ('volume', 'mute', 'chat')}   # as last saved, to save only changes
+        self.kept = {k: saved[k] for k in ('volume', 'mute', 'chat', 'window')}   # as last saved: save only changes
+        self.window_props = {}                       # mpv's window properties, as they change
         self.pending, self.save_task = {}, None
         try:
             gpus = hardware.known_gpus(self.config_dir, find_mpv())
@@ -83,8 +109,10 @@ class Player:
         self.gpu_for = dict(zip(('efficient', 'high'), hardware.split(gpus)))   # chips per mode, if there are two
         self.mode, self.mode_why = self.resolve(self.decoder)
         self.vo_alt = False                          # see use_mode()
-        kept = [f'--volume={saved["volume"]:g}', f'--mute={"yes" if saved["mute"] else "no"}']
-        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + kept + self.mode_args(self.mode) + list(mpv_args or []))
+        kept = [f'--volume={saved["volume"]:g}', f'--mute={"yes" if saved["mute"] else "no"}'] + window_args(saved['window'])
+        # the window keeps its size when a room or level starts (mpv would size it to each video)
+        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + kept + self.mode_args(self.mode) + list(mpv_args or []),
+                       optional_args=['--auto-window-resize=no'])
         self.current = None
         self.names = {}                              # (platform, room) -> streamer name, for rooms not saved yet
         self.chat_task = None
@@ -425,8 +453,14 @@ class Player:
             log.warning('could not save the settings: %s', e)
 
     def on_setting(self, name: str, value):
-        """Volume, mute or the chat overlay changed in the player: kept for the next start, once it settles (a
-        scroll on the volume sends many changes)."""
+        """Volume, mute, the chat overlay or the window changed in the player: kept for the next start, once it
+        settles (a scroll on the volume, or dragging the window's edge, sends many changes)."""
+        if name in WINDOW_PROPS:
+            self.window_props[name] = value
+            self.pending['window'] = None            # worked out when it settles: see flush()
+            if self.save_task is None or self.save_task.done():
+                self.save_task = asyncio.create_task(self._save_later())
+            return
         key = {'volume': 'volume', 'mute': 'mute', 'user-data/cnlv/chat': 'chat'}[name]
         if value is None or (key == 'volume') == isinstance(value, bool):
             return
@@ -439,6 +473,8 @@ class Player:
         self.flush()
 
     def flush(self):
+        if 'window' in self.pending:
+            self.pending['window'] = window_state(self.window_props, self.kept['window'])
         changed = {k: v for k, v in self.pending.items() if self.kept.get(k) != v}
         self.pending = {}
         if changed:
@@ -528,7 +564,7 @@ class Player:
                     asyncio.create_task(self.refresh_live())
             elif name in ('seek', 'playback-restart'):
                 self.flow.restart_play()            # a jump in the position isn't playing fast
-            elif name == 'property-change' and ev.get('name') in ('volume', 'mute', 'user-data/cnlv/chat'):
+            elif name == 'property-change' and ev.get('name') in ('volume', 'mute', 'user-data/cnlv/chat') + WINDOW_PROPS:
                 self.on_setting(ev['name'], ev.get('data'))
             elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
                 asyncio.create_task(self.on_cache_pause(bool(ev.get('data'))))
@@ -559,7 +595,7 @@ class Player:
         await self.mpv.command('observe_property', 1, 'paused-for-cache')
         if not self.chat_on:                         # off at the last start: off again (before the first message)
             await self.mpv.command('set_property', 'user-data/cnlv/chat', False)
-        for i, prop in enumerate(('volume', 'mute', 'user-data/cnlv/chat'), 2):
+        for i, prop in enumerate(('volume', 'mute', 'user-data/cnlv/chat') + WINDOW_PROPS, 2):
             await self.mpv.command('observe_property', i, prop)
         stepping_up = asyncio.create_task(self.auto_up())
         watching = asyncio.create_task(self.watch_flow())

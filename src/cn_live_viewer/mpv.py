@@ -55,13 +55,14 @@ async def open_pipe(path: str):
 
 
 class Mpv:
-    def __init__(self, scripts=(), extra_args=()):
+    def __init__(self, scripts=(), extra_args=(), optional_args=()):
         if WINDOWS:
             self.ipc = rf'\\.\pipe\cn-live-viewer-{os.getpid()}'
         else:
             runtime = os.environ.get('XDG_RUNTIME_DIR') or tempfile.gettempdir()
             self.ipc = os.path.join(runtime, f'cn-live-viewer-{os.getpid()}.sock')
         self.scripts, self.extra_args = list(scripts), list(extra_args)
+        self.optional_args = list(optional_args)    # passed only when this mpv knows them (older ones refuse to start)
         self.proc = self.reader = self.writer = None
         self._rid = 0
         self._replies = {}                           # request id -> future, for get()
@@ -75,12 +76,20 @@ class Mpv:
         known = await supported_options(mpv, names)
         return [f'--{n}={APP_ID}' for n in names if n in known]
 
+    @staticmethod
+    async def known(mpv: str, args) -> list:
+        if not args:
+            return []
+        names = {a[2:].split('=', 1)[0]: a for a in args}
+        found = await supported_options(mpv, names)
+        return [a for n, a in names.items() if n in found]
+
     async def start(self):
         mpv = find_mpv()
         self.proc = await asyncio.create_subprocess_exec(
             mpv, '--idle=yes', '--force-window=yes', f'--input-ipc-server={self.ipc}',
             '--user-agent=Mozilla/5.0', '--title=${media-title}', '--osc=no',   # bar.lua replaces mpv's control bar
-            *await self.window_id_args(mpv),
+            *await self.window_id_args(mpv), *await self.known(mpv, self.optional_args),
             *[f'--script={s}' for s in self.scripts], *self.extra_args,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
         self.reader, self.writer = await self._connect()

@@ -231,13 +231,14 @@ mpv and, on Windows, Python.
 ## Settings
 
 **Kept between starts** (in `settings.json`, next to the room list): the volume (50% at first) and mute, the chat
-overlay on or off, the quality you chose (Auto stays Auto) and the Video Decoder. Change them in the player; they come
+overlay on or off, the quality you chose (Auto stays Auto), the Video Decoder, and the window: fullscreen, maximized
+(the first start), or the size you gave it. The window keeps its size when you switch rooms. Change them in the player; they come
 back at the next start.
 
 cn-live-viewer starts its own mpv with these options:
 
 ```text
---hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --volume=<kept> --mute=<kept> --include=<the Video Decoder modes> --profile=<the mode>
+--hwdec=auto-safe --demuxer-max-back-bytes=512MiB --volume=<kept> --mute=<kept> --window-maximized=<kept> --geometry=<kept size> --fullscreen=<kept> --auto-window-resize=no --include=<the Video Decoder modes> --profile=<the mode>
 ```
 
 - `--demuxer-max-back-bytes=512MiB` keeps up to 512 MiB of watched video in memory, so you can go back about 3.5
