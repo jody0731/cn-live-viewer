@@ -60,6 +60,7 @@ class Player:
         self.rooms_path, self.overlay = rooms_path, overlay
         self.choice = q.parse(quality)               # AUTO, a cap in Mbps, or a Douyin quality name
         self.auto = q.Auto()
+        self.flow, self.resynced = q.Flow(), -math.inf   # how the stream arrives and plays; the last re-sync
         self.tiers, self.tier = [], None             # the current room's levels and the one playing
         self.stalled_since = None
         self.live = {}                               # (platform, room) -> True/False: online markers in the room lists
@@ -74,6 +75,7 @@ class Player:
         self.names = {}                              # (platform, room) -> streamer name, for rooms not saved yet
         self.chat_task = None
         self.switching = False
+        self.gen = 0                                 # counts loads: a room lookup overtaken by a newer choice gives up
         self.color = sys.stdout.isatty()
 
     def saved(self, platform, room):
@@ -149,6 +151,8 @@ class Player:
             self.waiting_task.cancel()               # a room we were waiting for: not any more
         self.waiting_task = None
         self.switching = True
+        self.gen += 1
+        gen = self.gen
         name = self.name_of(platform, room)
         if not quiet:
             await self.mpv.show(f'→ {name} …', 2)
@@ -156,20 +160,28 @@ class Player:
             tiers, referer, chat, streamer = await asyncio.to_thread(levels, platform, room)
             tier = q.pick(tiers, self.choice, self.auto.cap)
         except Exception as e:
+            if gen != self.gen:                      # another room or level was chosen meanwhile
+                return True
             if wait and isinstance(e, LookupError):
                 try:
                     status = await asyncio.to_thread(self._status, platform, room)
                 except Exception:                    # noqa: BLE001 - can't tell: assume offline, keep waiting
                     status = 'offline'
+                if gen != self.gen:
+                    return True
                 if status != 'missing':
                     await self.wait_for(platform, room, name)
-                    self.switching = False
+                    if gen == self.gen:
+                        self.switching = False
                     return True
             hint = f'Trying {self.name_of(*next_room)} …' if next_room else 'Tab: choose another room'
             await self.mpv.show(f'✗ {e}\n{hint}', 3 if next_room else 6)
             print(f'-- {e}', file=sys.stderr, flush=True)
-            self.switching = False
+            if gen == self.gen:
+                self.switching = False
             return False
+        if gen != self.gen:                          # chosen again meanwhile: the newer choice plays, not this one
+            return True
         if streamer:
             self.names[(platform, room)] = streamer
             name = self.name_of(platform, room)
@@ -179,6 +191,7 @@ class Player:
         await self.mpv.command('set_property', 'http-header-fields', [f'Referer: {referer}'])
         await self.mpv.command('set_property', 'force-media-title', name)
         await self.mpv.command('loadfile', tier.url, 'replace')
+        self.flow.reset()
         self.current, self.tiers, self.tier = (platform, room), tiers, tier
         self.live[(platform, room)] = True
         try:
@@ -190,7 +203,8 @@ class Player:
         self.chat_task = asyncio.create_task(self._chat(chat()))
         await self.send_rooms()
         await self.send_quality()
-        self.switching = False
+        if gen == self.gen:
+            self.switching = False
         return True
 
     # ---------------------------------------------------------------- an offline room, waiting for it to go live
@@ -239,14 +253,18 @@ class Player:
     async def use_tier(self, tier, message: str, probing: bool = False):
         """Switch the playing room to another level. The chat keeps running."""
         self.switching = True
+        self.gen += 1
+        gen = self.gen
         await self.mpv.command('loadfile', tier.url, 'replace')
+        self.flow.reset()
         self.tier = tier
         self.auto.changed(time.monotonic(), probing)
         await self.send_quality()
         await self.mpv.show(message, 3)
         print(f'-- {message}', flush=True)
         await asyncio.sleep(1)                       # the replaced stream's end-file isn't a dropped stream
-        self.switching = False
+        if gen == self.gen:
+            self.switching = False
 
     async def set_quality(self, choice: str):
         """From the menus: 'auto', or a level's id."""
@@ -267,18 +285,30 @@ class Player:
             await self.send_quality()
             await self.mpv.show('Quality: Auto' if self.choice == q.AUTO else f'Quality: {tier.label}', 2)
 
+    def connection_behind(self) -> bool:
+        """Is an empty buffer the connection's fault? Not when the stream kept arriving in real time: then playback
+        ran ahead (see quality.Flow), and a lower level wouldn't help."""
+        if self.flow.arriving_in_time():
+            print('-- The buffer ran dry, but the stream arrives in time: quality kept', flush=True)
+            return False
+        return True
+
     async def on_cache_pause(self, paused: bool):
-        """mpv paused because the buffer ran dry (paused-for-cache), or resumed. Auto steps down when it keeps up."""
+        """mpv paused because the buffer ran dry (paused-for-cache), or resumed. Auto steps down when it keeps up,
+        and the connection is what can't keep up."""
         if not paused:
             self.stalled_since = None
             return
         now = time.monotonic()
         self.stalled_since = now
-        if self.choice == q.AUTO and self.auto.stall_started(now):
+        if self.choice != q.AUTO or not self.connection_behind():
+            return
+        if self.auto.stall_started(now):
             await self.step_down()
             return
         await asyncio.sleep(q.Auto.STALL_LONG)
-        if self.stalled_since == now and self.choice == q.AUTO and self.auto.stall_long(time.monotonic()):
+        if (self.stalled_since == now and self.choice == q.AUTO and self.auto.stall_long(time.monotonic())
+                and self.connection_behind()):
             await self.step_down()
 
     async def step_down(self):
@@ -287,6 +317,28 @@ class Player:
             return
         self.auto.cap = lower[0].mbps
         await self.use_tier(lower[0], f'The connection can\'t keep up: {lower[0].label} (Auto)')
+
+    async def watch_flow(self):
+        """Once a second: how the stream arrives and plays (quality.Flow). A picture racing ahead of the sound, or
+        drifting apart from it, is put back in step by a seek to where it is (mpv restarts both together)."""
+        while True:
+            await asyncio.sleep(1)
+            if not self.tier or self.switching:
+                self.flow.reset()
+                continue
+            gen = self.gen
+            cache = await self.mpv.get('demuxer-cache-state') or {}
+            pos, speed, avsync = [await self.mpv.get(n) for n in ('time-pos', 'speed', 'avsync')]
+            stopped = await self.mpv.get('pause') or await self.mpv.get('paused-for-cache')
+            if gen != self.gen:                      # a switch happened while we asked
+                continue
+            now = time.monotonic()
+            self.flow.sample(now, cache.get('cache-end'), pos, not stopped and speed == 1, avsync)
+            if self.flow.out_of_step() and now - self.resynced > 10:
+                self.resynced = now
+                self.flow.restart_play()
+                await self.mpv.command('seek', 0, 'relative+exact')
+                print('-- Picture and sound out of step: re-synced', flush=True)
 
     async def auto_up(self):
         """Every 30 s: after a calm stretch, Auto tries one level up."""
@@ -398,6 +450,8 @@ class Player:
                     asyncio.create_task(self.set_picture(args[0]))
                 elif msg == 'cnlv-refresh-live':
                     asyncio.create_task(self.refresh_live())
+            elif name in ('seek', 'playback-restart'):
+                self.flow.restart_play()            # a jump in the position isn't playing fast
             elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
                 asyncio.create_task(self.on_cache_pause(bool(ev.get('data'))))
             elif name == 'end-file' and ev.get('reason') in ('eof', 'error') and self.current and not self.switching:
@@ -411,6 +465,7 @@ class Player:
         events = asyncio.create_task(self._events())
         await self.mpv.command('observe_property', 1, 'paused-for-cache')
         stepping_up = asyncio.create_task(self.auto_up())
+        watching = asyncio.create_task(self.watch_flow())
         live_checks = asyncio.create_task(self.live_loop())
         try:
             await self.send_picture()
@@ -443,5 +498,6 @@ class Player:
                 self.chat_task.cancel()
             events.cancel()
             stepping_up.cancel()
+            watching.cancel()
             live_checks.cancel()
             await self.mpv.close()

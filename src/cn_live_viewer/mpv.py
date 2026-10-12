@@ -64,6 +64,7 @@ class Mpv:
         self.scripts, self.extra_args = list(scripts), list(extra_args)
         self.proc = self.reader = self.writer = None
         self._rid = 0
+        self._replies = {}                           # request id -> future, for get()
 
     async def window_id_args(self, mpv: str) -> list:
         """Name the window after cn-live-viewer, so Linux desktops group it under the app launcher (Windows and
@@ -99,13 +100,30 @@ class Mpv:
             await asyncio.sleep(0.1)
         raise RuntimeError('mpv did not open its control connection')
 
-    async def command(self, *args):
+    async def _send(self, args) -> int:
         self._rid += 1
         try:
             self.writer.write((json.dumps({'command': list(args), 'request_id': self._rid}, ensure_ascii=False) + '\n').encode())
             await self.writer.drain()
         except (ConnectionError, OSError):           # mpv has closed (e.g. quit while a room was loading): nothing to tell
             pass
+        return self._rid
+
+    async def command(self, *args):
+        await self._send(args)
+
+    async def get(self, name: str, timeout: float = 2):
+        """A property's value, or None when mpv doesn't have it (yet). The reply arrives through events(), which
+        must be running."""
+        fut = asyncio.get_running_loop().create_future()
+        self._replies[self._rid + 1] = fut
+        rid = await self._send(['get_property', name])
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            self._replies.pop(rid, None)
 
     async def show(self, text: str, seconds: float = 3):
         await self.command('show-text', text, int(seconds * 1000))
@@ -127,6 +145,10 @@ class Mpv:
                 continue
             if 'event' in msg:
                 yield msg
+            elif msg.get('request_id') in self._replies:
+                fut = self._replies.pop(msg['request_id'])
+                if not fut.done():
+                    fut.set_result(msg.get('data') if msg.get('error') == 'success' else None)
 
     async def close(self):
         if self.writer:

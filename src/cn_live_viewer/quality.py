@@ -75,3 +75,56 @@ class Auto:
     def may_step_up(self, now: float) -> bool:
         return (now - self.last_stall >= self.CALM and now - self.last_change >= self.CALM
                 and now >= self.hold_until)
+
+
+class Flow:
+    """How the playing stream moves, from samples about a second apart: how fast it arrives (the newest buffered
+    timestamp against the clock) and how it plays (the playback position against the clock, and mpv's A/V offset).
+    After a room or level switch mpv sometimes plays the picture fast, out of step with the sound, until the buffer
+    is empty. That stall is not the connection: the stream kept arriving in real time. Auto steps down only when it
+    didn't, and a picture racing ahead is put back in step with the sound."""
+    WINDOW, MIN_SPAN, IN_TIME = 20, 5, 0.95          # arrival: judged over up to 20 s (at least 5), in time >= 95 %
+    RACE_SPAN, RACE_RATE, OUT_OF_STEP = 3, 1.25, 0.5  # racing: 25 % faster than the clock for 3 s, or A/V 0.5 s apart
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self) -> None:
+        """A new stream: forget everything."""
+        self.arrived = []                            # (now, newest buffered timestamp)
+        self.restart_play()
+
+    def restart_play(self) -> None:
+        """Playback jumped (a seek) or stopped (a pause, an empty buffer): playback speed starts over."""
+        self.played = []                             # (now, playback position, A/V offset) while playing steadily
+
+    def sample(self, now: float, newest, pos, playing: bool, avsync=None) -> None:
+        if newest is not None:
+            if self.arrived:
+                t, n = self.arrived[-1]
+                if not -1 <= newest - n <= now - t + 10:     # the timestamps jumped: a new or restarted stream
+                    self.arrived = []
+            self.arrived.append((now, newest))
+        if playing and pos is not None:
+            self.played.append((now, pos, avsync))
+        else:
+            self.restart_play()
+        self.arrived = [a for a in self.arrived if now - a[0] <= self.WINDOW]
+        self.played = [p for p in self.played if now - p[0] <= self.RACE_SPAN + 0.5]
+
+    def arriving_in_time(self):
+        """True: the stream arrives at least as fast as it plays, so an empty buffer isn't the connection.
+        False: it arrives too slowly. None: not enough samples yet."""
+        if len(self.arrived) < 2 or self.arrived[-1][0] - self.arrived[0][0] < self.MIN_SPAN:
+            return None
+        (t0, n0), (t1, n1) = self.arrived[0], self.arrived[-1]
+        return (n1 - n0) / (t1 - t0) >= self.IN_TIME
+
+    def out_of_step(self) -> bool:
+        """The picture races ahead of the clock, or picture and sound drifted apart, for the last few seconds."""
+        if len(self.played) < 2 or self.played[-1][0] - self.played[0][0] < self.RACE_SPAN:
+            return False
+        (t0, p0, _), (t1, p1, _) = self.played[0], self.played[-1]
+        racing = (p1 - p0) / (t1 - t0) > self.RACE_RATE
+        apart = all(a is not None and abs(a) > self.OUT_OF_STEP for _, _, a in self.played)
+        return racing or apart
