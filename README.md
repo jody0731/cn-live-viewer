@@ -171,6 +171,9 @@ douyin      286658238204    A Douyin room
 
 **Auto (the default)** starts at the best quality the room offers:
 - **Step down:** if the buffer runs dry for more than 4 s, or twice within a minute, Auto steps down one level.
+  Only when the connection is the cause: if the stream kept arriving in real time, the quality stays.
+- **Picture and sound in step:** if the picture races ahead or drifts away from the sound (it can happen right after
+  a switch), the player puts them back in step.
 - **Step up:** after 5 calm minutes, it tries one level up.
 - **Backing off:** if that try stalls too, it waits 20 minutes before trying again.
 - **Notices:** every change shows on screen.

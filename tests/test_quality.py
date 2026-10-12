@@ -56,6 +56,52 @@ class AutoTest(unittest.TestCase):
         self.assertEqual(q.Auto().cap, math.inf)
 
 
+class FlowTest(unittest.TestCase):
+    def feed(self, f, seconds, arrive=1.0, play=1.0, avsync=0.0, start=0.0):
+        for i in range(seconds + 1):
+            f.sample(start + i, 100 + arrive * i, 50 + play * i, True, avsync)
+
+    def test_a_stream_arriving_in_real_time_is_in_time(self):
+        f = q.Flow()
+        self.feed(f, 3)
+        self.assertIsNone(f.arriving_in_time())             # too soon to tell
+        f.reset()
+        self.feed(f, 10)
+        self.assertTrue(f.arriving_in_time())
+        self.assertFalse(f.out_of_step())
+
+    def test_a_slow_connection_is_behind(self):
+        f = q.Flow()
+        self.feed(f, 10, arrive=0.7)
+        self.assertFalse(f.arriving_in_time())
+
+    def test_a_picture_racing_ahead_is_out_of_step_but_not_the_connection(self):
+        f = q.Flow()
+        self.feed(f, 6, play=2.0)
+        self.assertTrue(f.out_of_step())
+        self.assertTrue(f.arriving_in_time())
+
+    def test_picture_and_sound_apart_is_out_of_step(self):
+        f = q.Flow()
+        self.feed(f, 4, avsync=-1.2)
+        self.assertTrue(f.out_of_step())
+
+    def test_a_seek_isnt_racing(self):
+        f = q.Flow()
+        self.feed(f, 2)
+        f.sample(3, 103, 80, True)                          # 27 s further in 1 s: a seek ...
+        f.restart_play()                                    # ... which mpv reports
+        for i in range(4, 8):
+            f.sample(i, 100 + i, 77 + i, True)
+        self.assertFalse(f.out_of_step())
+
+    def test_a_timestamp_jump_starts_the_arrival_check_over(self):
+        f = q.Flow()
+        self.feed(f, 10)
+        f.sample(11, 5000, 61, True)                        # a restarted stream with new timestamps
+        self.assertIsNone(f.arriving_in_time())
+
+
 class DouyinTierTest(unittest.TestCase):
     def test_label_from_sdk_params(self):
         main = {'flv': 'u', 'sdk_params': json.dumps({'vbitrate': 5200000, 'resolution': '1920x1080'})}

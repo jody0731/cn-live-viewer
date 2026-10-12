@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Switching rooms or levels:** after a switch the picture sometimes played fast, out of step with the sound, until
+  the buffer ran dry, and Auto then lowered the quality although the connection was fine. Auto now steps down only
+  when the stream arrives slower than real time, and a picture racing ahead of or drifting from the sound is put
+  back in step at once.
+- Switching rooms quickly could play an earlier choice after the later one, when its lookup finished last.
+
 ## 0.11.0 (2026-10-11)
 
 - **Light by default.** A new Efficient picture mode is the default: hardware decoding, mpv's standard scaling,
