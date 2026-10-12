@@ -17,7 +17,7 @@ SCRIPTS = [os.path.join(os.path.dirname(__file__), 'mpv', n) for n in ('danmaku.
 PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'mpv', 'cnlv.conf')
 PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the Video Decoder's modes, in PROFILES_FILE
 # hardware decoding (the video chip uses far less power than decoding on the CPU), a maximized (not fullscreen)
-# window, a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
+# window, the volume and mute kept from the last start, a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
 # and the Video Decoder's modes; your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--window-maximized=yes', '--demuxer-max-back-bytes=512MiB',
                     f'--include={PROFILES_FILE}']
@@ -58,7 +58,6 @@ def streamer_name(platform: str, room: str):
 class Player:
     def __init__(self, rooms_path: str, quality: str = None, overlay: bool = True, mpv_args=None):
         self.rooms_path, self.overlay = rooms_path, overlay
-        self.choice = q.parse(quality)               # AUTO, a cap in Mbps, or a Douyin quality name
         self.auto = q.Auto()
         self.flow, self.resynced = q.Flow(), -math.inf   # how the stream arrives and plays; the last re-sync
         self.tiers, self.tier = [], None             # the current room's levels and the one playing
@@ -69,7 +68,13 @@ class Player:
         self.waiting_task = None                     # waiting for an offline room to go live
         self.rooms = roomlist.load(rooms_path)
         self.config_dir = os.path.dirname(os.path.abspath(rooms_path))
-        self.decoder = settings.load(self.config_dir)['decoder']   # Auto, Efficient or High quality
+        saved = settings.load(self.config_dir)
+        self.decoder = saved['decoder']              # Auto, Efficient or High quality
+        # AUTO, a cap in Mbps, or a Douyin quality name: -q for this start only, else the last one chosen in the player
+        self.choice = q.parse(quality if quality is not None else saved['quality'])
+        self.chat_on = saved['chat']
+        self.kept = {k: saved[k] for k in ('volume', 'mute', 'chat')}   # as last saved, to save only changes
+        self.pending, self.save_task = {}, None
         try:
             gpus = hardware.known_gpus(self.config_dir, find_mpv())
         except FileNotFoundError:                    # Mpv.start() says so
@@ -78,7 +83,8 @@ class Player:
         self.gpu_for = dict(zip(('efficient', 'high'), hardware.split(gpus)))   # chips per mode, if there are two
         self.mode, self.mode_why = self.resolve(self.decoder)
         self.vo_alt = False                          # see use_mode()
-        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + self.mode_args(self.mode) + list(mpv_args or []))
+        kept = [f'--volume={saved["volume"]:g}', f'--mute={"yes" if saved["mute"] else "no"}']
+        self.mpv = Mpv(SCRIPTS, DEFAULT_MPV_ARGS + kept + self.mode_args(self.mode) + list(mpv_args or []))
         self.current = None
         self.names = {}                              # (platform, room) -> streamer name, for rooms not saved yet
         self.chat_task = None
@@ -287,6 +293,7 @@ class Player:
                 return
             # a fixed level carries over to other rooms as a bitrate cap; audio only by name, where a room has it
             self.choice = tier.mbps if tier.video else tier.id
+        self.save(quality=self.choice if isinstance(self.choice, str) else f'{self.choice:g}')
         if tier is not self.tier:
             await self.use_tier(tier, f'Quality: {tier.label}' + (' (Auto)' if self.choice == q.AUTO else ''))
         else:
@@ -409,10 +416,34 @@ class Player:
         if decoder == 'auto':
             text += f' · {settings.MODES[mode]} ({self.mode_why})'
         await self.mpv.show(text + (f'\n{chip.name}' if chip else ''), 3)
+        self.save(decoder=decoder)
+
+    def save(self, **changes):
         try:
-            settings.save(self.config_dir, decoder=decoder)
+            settings.save(self.config_dir, **changes)
         except OSError as e:
             log.warning('could not save the settings: %s', e)
+
+    def on_setting(self, name: str, value):
+        """Volume, mute or the chat overlay changed in the player: kept for the next start, once it settles (a
+        scroll on the volume sends many changes)."""
+        key = {'volume': 'volume', 'mute': 'mute', 'user-data/cnlv/chat': 'chat'}[name]
+        if value is None or (key == 'volume') == isinstance(value, bool):
+            return
+        self.pending[key] = round(value) if key == 'volume' else value
+        if self.save_task is None or self.save_task.done():
+            self.save_task = asyncio.create_task(self._save_later())
+
+    async def _save_later(self):
+        await asyncio.sleep(1)
+        self.flush()
+
+    def flush(self):
+        changed = {k: v for k, v in self.pending.items() if self.kept.get(k) != v}
+        self.pending = {}
+        if changed:
+            self.kept.update(changed)
+            self.save(**changed)
 
     async def reload(self, message: str):
         self.rooms = roomlist.load(self.rooms_path)
@@ -497,6 +528,8 @@ class Player:
                     asyncio.create_task(self.refresh_live())
             elif name in ('seek', 'playback-restart'):
                 self.flow.restart_play()            # a jump in the position isn't playing fast
+            elif name == 'property-change' and ev.get('name') in ('volume', 'mute', 'user-data/cnlv/chat'):
+                self.on_setting(ev['name'], ev.get('data'))
             elif name == 'property-change' and ev.get('name') == 'paused-for-cache':
                 asyncio.create_task(self.on_cache_pause(bool(ev.get('data'))))
             elif name == 'end-file' and ev.get('reason') in ('eof', 'error') and self.current and not self.switching:
@@ -524,6 +557,10 @@ class Player:
         if WINDOWS:
             asyncio.create_task(self.windows_taskbar())
         await self.mpv.command('observe_property', 1, 'paused-for-cache')
+        if not self.chat_on:                         # off at the last start: off again (before the first message)
+            await self.mpv.command('set_property', 'user-data/cnlv/chat', False)
+        for i, prop in enumerate(('volume', 'mute', 'user-data/cnlv/chat'), 2):
+            await self.mpv.command('observe_property', i, prop)
         stepping_up = asyncio.create_task(self.auto_up())
         watching = asyncio.create_task(self.watch_flow())
         live_checks = asyncio.create_task(self.live_loop())
@@ -563,4 +600,5 @@ class Player:
             stepping_up.cancel()
             watching.cancel()
             live_checks.cancel()
+            self.flush()                             # a change in the last second before quitting
             await self.mpv.close()

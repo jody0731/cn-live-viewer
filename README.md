@@ -107,9 +107,9 @@ ROOM is a room number or a link. A bare number is a Huya room unless it's saved 
 
 | Option | Meaning |
 |---|---|
-| `-q`, `--quality` | `auto` (default), a bitrate cap in Mbps such as `8`, or for Douyin `origin`, `hd`, `sd`, `ld` or `md`. See Quality. |
+| `-q`, `--quality` | `auto`, a bitrate cap in Mbps such as `8`, or for Douyin `origin`, `hd`, `sd`, `ld` or `md`, for this start only. Without it, the quality last chosen in the player (else Auto). See Quality. |
 | `--no-overlay` | No chat over the video. It still prints in the terminal. |
-| `--mpv-args="..."` | Extra mpv options, e.g. `--mpv-args="--volume=50 --fs"` |
+| `--mpv-args="..."` | Extra mpv options, e.g. `--mpv-args="--fs"` |
 | `--rooms FILE` | Use another room list |
 | `-v` | Log connection details |
 
@@ -230,10 +230,14 @@ mpv and, on Windows, Python.
 
 ## Settings
 
+**Kept between starts** (in `settings.json`, next to the room list): the volume (50% at first) and mute, the chat
+overlay on or off, the quality you chose (Auto stays Auto) and the Video Decoder. Change them in the player; they come
+back at the next start.
+
 cn-live-viewer starts its own mpv with these options:
 
 ```text
---hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --include=<the Video Decoder modes> --profile=<the mode>
+--hwdec=auto-safe --window-maximized=yes --demuxer-max-back-bytes=512MiB --volume=<kept> --mute=<kept> --include=<the Video Decoder modes> --profile=<the mode>
 ```
 
 - `--demuxer-max-back-bytes=512MiB` keeps up to 512 MiB of watched video in memory, so you can go back about 3.5
@@ -249,7 +253,7 @@ These options are passed on the command line, so they win over the same options 
 in your `mpv.conf` and `input.conf` still applies. Change them with `--mpv-args`, which comes last, for example:
 
 ```bash
-cn-live-viewer --mpv-args="--volume=50 --window-maximized=no"
+cn-live-viewer --mpv-args="--window-maximized=no --fs"
 ```
 
 The chat overlay has four options:

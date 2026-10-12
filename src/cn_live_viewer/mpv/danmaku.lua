@@ -119,15 +119,19 @@ mp.observe_property("user-data/cnlv/decoder", "native", retime)
 mp.register_script_message("cnlv-danmaku", add)
 mp.register_script_message("cnlv-danmaku-clear", function() items = {}; lane_free_at = {}; render() end)
 
--- the on/off state, for the control bar and the right-click menu
-local function publish()
-    mp.set_property_native("user-data/cnlv/chat", enabled)
+-- the on/off state lives in user-data/cnlv/chat: the control bar and the right-click menu read it, and cn-live-viewer
+-- sets it at start to how it was last time (settings.json), whether this script loaded before or after that
+local function set_enabled(on)
+    enabled = on
+    if not enabled then items = {}; lane_free_at = {}; render() end
 end
-publish()
+mp.observe_property("user-data/cnlv/chat", "native", function(_, v)
+    if v ~= nil and v ~= enabled then set_enabled(v) end
+end)
+if mp.get_property_native("user-data/cnlv/chat") == nil then mp.set_property_native("user-data/cnlv/chat", enabled) end
 
 mp.add_key_binding("c", "cnlv-toggle-danmaku", function()
-    enabled = not enabled
-    if not enabled then items = {}; lane_free_at = {}; render() end
-    publish()
+    set_enabled(not enabled)
+    mp.set_property_native("user-data/cnlv/chat", enabled)
     mp.osd_message(enabled and "Chat overlay on" or "Chat overlay off", 1.2)
 end)

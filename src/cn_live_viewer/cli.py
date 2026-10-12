@@ -48,12 +48,12 @@ def main(argv=None):
     setup_console()
     p = argparse.ArgumentParser(prog='cn-live-viewer', usage=USAGE, add_help=True)
     p.add_argument('words', nargs='*', help=argparse.SUPPRESS)
-    p.add_argument('-q', '--quality', default='auto',
-                   help='auto (default: the best the connection keeps up with), a bitrate cap in Mbps (e.g. 8), '
-                        'or for Douyin origin/hd/sd/ld/md')
+    p.add_argument('-q', '--quality', default=None,
+                   help='auto (the best the connection keeps up with), a bitrate cap in Mbps (e.g. 8), '
+                        'or for Douyin origin/hd/sd/ld/md; default: the last one chosen in the player, else auto')
     p.add_argument('--no-overlay', action='store_true', help='no chat over the video (chat still prints here)')
     p.add_argument('--rooms', default=roomlist.default_path(), help='room list file (default: %(default)s)')
-    p.add_argument('--mpv-args', default='', help='extra mpv options as one argument, e.g. --mpv-args="--volume=70 --fs"')
+    p.add_argument('--mpv-args', default='', help='extra mpv options as one argument, e.g. --mpv-args="--fs"')
     p.add_argument('-v', '--verbose', action='store_true', help='log connection details')
     p.add_argument('-V', '--version', action='version', version=f'cn-live-viewer {__version__}')
     p.add_argument('--launcher', action='store_true', help=argparse.SUPPRESS)   # started from the app launcher

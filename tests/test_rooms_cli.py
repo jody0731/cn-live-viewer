@@ -151,6 +151,18 @@ class SettingsTest(unittest.TestCase):
                 f.write('not json')
             self.assertEqual(settings.load(d)['decoder'], 'auto')
 
+    def test_kept_settings_and_their_defaults(self):
+        with tempfile.TemporaryDirectory() as d:
+            s = settings.load(d)
+            self.assertEqual((s['volume'], s['mute'], s['chat'], s['quality']), (50, False, True, 'auto'))
+            settings.save(d, volume=35, mute=True, chat=False, quality='8')
+            s = settings.load(d)
+            self.assertEqual((s['volume'], s['mute'], s['chat'], s['quality']), (35, True, False, '8'))
+            with open(settings.path(d), 'w', encoding='utf-8') as f:
+                f.write('{"volume": "loud", "mute": "yes", "chat": 1, "quality": ""}')
+            s = settings.load(d)
+            self.assertEqual((s['volume'], s['mute'], s['chat'], s['quality']), (50, False, True, 'auto'))
+
     def test_the_old_picture_choice_carries_over(self):
         with tempfile.TemporaryDirectory() as d:
             with open(settings.path(d), 'w', encoding='utf-8') as f:

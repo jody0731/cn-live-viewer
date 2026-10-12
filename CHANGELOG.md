@@ -13,6 +13,9 @@
   quality on the separate one, switching at once; before, both ran wherever the system put mpv, often the weak chip,
   and High quality stuttered there. The chips are detected once per install or update; `cn-live-viewer check` lists
   them. A Picture choice made in 0.11 is kept.
+- **Remembers your settings:** volume and mute, the chat overlay on or off, and a quality you chose (Auto stays
+  Auto) come back at the next start, with the Video Decoder. `-q` now applies to that start only.
+- **Volume starts at 50%** (was mpv's 100%, or your `mpv.conf`).
 - **Calmer chat:** messages cross the screen in 18 s instead of 9, so each redraw moves them half as far and they
   glide. High quality redraws the chat up to 120 times a second (was 240); up to 100 messages show at once (was 60).
 - **Several windows:** on Windows, the player's taskbar button is now cn-live-viewer's own, so "new window" and
