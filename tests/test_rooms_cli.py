@@ -167,21 +167,20 @@ class SettingsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(settings.load(d)['window'], {'fullscreen': False, 'maximized': True, 'size': None})
             with open(settings.path(d), 'w', encoding='utf-8') as f:
-                f.write('{"window": {"fullscreen": "yes", "maximized": false, "size": [5, 50]}}')
+                f.write('{"window": {"fullscreen": "yes", "maximized": false, "size": [5, 50.5]}}')
             self.assertEqual(settings.load(d)['window'], {'fullscreen': False, 'maximized': False, 'size': None})
         self.assertEqual(player.window_args({'fullscreen': False, 'maximized': True, 'size': None}),
                          ['--window-maximized=yes'])
-        self.assertEqual(player.window_args({'fullscreen': True, 'maximized': False, 'size': [50, 62.5]}),
-                         ['--window-maximized=no', '--geometry=50%x62.5%', '--fullscreen=yes'])
+        self.assertEqual(player.window_args({'fullscreen': True, 'maximized': False, 'size': [1536, 864]}),
+                         ['--window-maximized=no', '--geometry=1536x864', '--fullscreen=yes'])
 
     def test_window_size_only_from_a_normal_window(self):
         before = {'fullscreen': False, 'maximized': True, 'size': None}
-        props = {'fullscreen': False, 'window-maximized': False, 'osd-dimensions': {'w': 1920, 'h': 1080},
-                 'display-width': 3840, 'display-height': 2160}
-        self.assertEqual(player.window_state(props, before), {'fullscreen': False, 'maximized': False, 'size': [50, 50]})
+        props = {'fullscreen': False, 'window-maximized': False, 'osd-dimensions': {'w': 1920, 'h': 1080}}
+        self.assertEqual(player.window_state(props, before), {'fullscreen': False, 'maximized': False, 'size': [1920, 1080]})
         full = dict(props, fullscreen=True, **{'osd-dimensions': {'w': 3840, 'h': 2160}})
-        self.assertEqual(player.window_state(full, {'fullscreen': False, 'maximized': False, 'size': [50, 50]}),
-                         {'fullscreen': True, 'maximized': False, 'size': [50, 50]})   # the normal size stays
+        normal = {'fullscreen': False, 'maximized': False, 'size': [1920, 1080]}
+        self.assertEqual(player.window_state(full, normal), dict(normal, fullscreen=True))   # the normal size stays
 
     def test_the_old_picture_choice_carries_over(self):
         with tempfile.TemporaryDirectory() as d:

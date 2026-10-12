@@ -580,3 +580,21 @@ ran the installer in PowerShell 7 with Python already installed.
   Store placeholder first on PATH, and `CNLV_NO_SYSTEM_PYTHON` making the installer ignore the Pythons the runner
   already has.
 
+
+### Video Decoder, kept settings, steadier switching (0.12.0)
+
+- **Auto stepped down for the wrong reason.** After a room or level switch the picture sometimes ran fast, out of
+  step with the sound, until the buffer was empty; Auto read that stall as a slow connection. It wasn't reproduced
+  (six quick switches at up to 2 Mbps stayed in sync), so the handling changed instead: the player samples mpv's
+  `demuxer-cache-state` `cache-end` once a second and steps down only when the stream arrives below 95% of real
+  time over the last 20 s. A picture running over 25% faster than the clock for 3 s, or `avsync` above 0.5 s, gets
+  `seek 0 relative+exact`, which restarts audio and video together. Live check: 11 samples in 14 s, "in time".
+- **Choosing a graphics chip in mpv.** mpv lists chips with `--d3d11-adapter=help` (Windows, "Adapter N: vendor:
+  4318, description: ...", matched by case-insensitive prefix) and `--vulkan-device=help` (elsewhere).
+  `d3d11-adapter` carries mpv's UPDATE_VO flag, so changing it at runtime rebuilds the video output; `vulkan-device`
+  doesn't, and setting `vo` to the value it already has does nothing (mpv skips writes of equal values), so on Linux
+  the player alternates `vo` between `gpu-next` and `gpu-next,gpu`.
+- **Window size.** `--geometry` with decimal percentages (`30.5%x32.2%`) makes mpv refuse to start, and on Wayland
+  with two monitors `display-width`/`display-height` reported 5040x2681, matching neither monitor, while `40%x40%`
+  meant 40% of the 4K one. Pixel sizes behave: `--geometry=1536x864` gives a 1536x864 (physical) window at 1.8x
+  scaling, the same numbers `osd-dimensions` reports. So the window size is kept in pixels.

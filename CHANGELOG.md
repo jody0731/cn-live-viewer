@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 (2026-10-12)
 
 - **Switching rooms or levels:** after a switch the picture sometimes played fast, out of step with the sound, until
   the buffer ran dry, and Auto then lowered the quality although the connection was fine. Auto now steps down only
@@ -14,8 +14,8 @@
   and High quality stuttered there. The chips are detected once per install or update; `cn-live-viewer check` lists
   them. A Picture choice made in 0.11 is kept.
 - **Remembers your settings:** volume and mute, the chat overlay on or off, and a quality you chose (Auto stays
-  Auto) come back at the next start, with the Video Decoder and the window: fullscreen, maximized, or its size (as
-  a share of the screen, so it fits any screen scale). The window no longer resizes itself when you switch rooms.
+  Auto) come back at the next start, with the Video Decoder and the window: fullscreen, maximized, or its size.
+  The window no longer resizes itself when you switch rooms.
   `-q` now applies to that start only.
 - **Volume starts at 50%** (was mpv's 100%, or your `mpv.conf`).
 - **Calmer chat:** messages cross the screen in 18 s instead of 9, so each redraw moves them half as far and they

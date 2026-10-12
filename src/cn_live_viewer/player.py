@@ -41,15 +41,17 @@ def print_chat(nick: str, text: str, color: bool) -> None:
         print(f'{nick}: {text}', flush=True)
 
 
-WINDOW_PROPS = ('fullscreen', 'window-maximized', 'osd-dimensions', 'display-width', 'display-height')
+WINDOW_PROPS = ('fullscreen', 'window-maximized', 'osd-dimensions')
 
 
 def window_args(w: dict) -> list:
     """mpv options for the window as it was last time (settings.window): fullscreen, maximized (the first start), or
-    the size it had, as a share of the screen so it's the same on any screen scale."""
+    the size it had. In screen pixels, as mpv reports them (osd-dimensions) and takes them back (--geometry), on HiDPI
+    screens too. (Not a share of the screen: mpv refuses decimals there, and its display-width on Wayland with two
+    monitors matched neither.)"""
     args = [f'--window-maximized={"yes" if w["maximized"] else "no"}']
     if w['size']:
-        args.append(f'--geometry={w["size"][0]:g}%x{w["size"][1]:g}%')
+        args.append(f'--geometry={w["size"][0]}x{w["size"][1]}')
     if w['fullscreen']:
         args.append('--fullscreen=yes')
     return args
@@ -59,10 +61,9 @@ def window_state(props: dict, before: dict) -> dict:
     """The window settings from mpv's properties; the size only from a window that is neither fullscreen nor
     maximized (else the last such size stays)."""
     w = dict(before, fullscreen=bool(props.get('fullscreen')), maximized=bool(props.get('window-maximized')))
-    osd, dw, dh = props.get('osd-dimensions') or {}, props.get('display-width'), props.get('display-height')
-    if not w['fullscreen'] and not w['maximized'] and osd.get('w') and osd.get('h') and dw and dh:
-        size = [round(min(100, max(10, 100 * osd['w'] / dw)), 1), round(min(100, max(10, 100 * osd['h'] / dh)), 1)]
-        w['size'] = size
+    osd = props.get('osd-dimensions') or {}
+    if not w['fullscreen'] and not w['maximized'] and (osd.get('w') or 0) >= 160 and (osd.get('h') or 0) >= 160:
+        w['size'] = [int(osd['w']), int(osd['h'])]
     return w
 
 
@@ -603,8 +604,8 @@ class Player:
         try:
             await self.send_decoder()
             chip = self.gpu_for.get(self.mode)
-            print(f'-- Video Decoder: {settings.DECODERS[self.decoder]} · {settings.MODES[self.mode]} ({self.mode_why})'
-                  + (f' on {chip.name}' if chip else ''), flush=True)
+            how = f'Auto · {settings.MODES[self.mode]} ({self.mode_why})' if self.decoder == 'auto' else settings.MODES[self.mode]
+            print(f'-- Video Decoder: {how}' + (f' on {chip.name}' if chip else ''), flush=True)
             await self.send_rooms()                  # before the first room, so the list is there even if it fails
             if len(candidates) > 1:
                 # check them all at once (and the saved rooms, for the markers), then try live rooms first
