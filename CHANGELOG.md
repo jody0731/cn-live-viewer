@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.13.0 (2026-10-16)
+
+- **Fast motion in High quality:** High quality times the video to the display. When the display's timing as mpv
+  sees it is off, as on laptops whose separate graphics chip draws for a screen wired to the built-in one, the
+  picture kept falling behind the sound and caught up by skipping frames, which looks like fast-forward. Racing
+  is now caught sooner (15% fast for 2 s, or sound and picture 0.3 s apart), and when it keeps coming back (twice
+  in two minutes), High quality times the video to the sound for the rest of that run: the sharper scaling stays,
+  the frame blending goes, and a message says so.
+- **The window moves only by its title bar.** Clicking or dragging on the picture no longer drags the window.
+- **A log when started from the app launcher:** with no terminal to print to, what it would print (rooms, quality
+  changes, re-syncs, errors; not the chat) goes to `cn-live-viewer.log` beside the room list, started afresh each
+  time.
+
 ## 0.12.0 (2026-10-12)
 
 - **Switching rooms or levels:** after a switch the picture sometimes played fast, out of step with the sound, until

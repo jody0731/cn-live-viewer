@@ -18,9 +18,10 @@ PROFILES_FILE = os.path.join(os.path.dirname(__file__), 'mpv', 'cnlv.conf')
 PROFILES = {'efficient': 'cnlv-efficient', 'high': 'cnlv-high-quality'}   # the Video Decoder's modes, in PROFILES_FILE
 # hardware decoding (the video chip uses far less power than decoding on the CPU), the window, volume and mute kept
 # from the last start (window_args), a bigger rewind buffer for the seek bar (512 MiB: about 3.5 minutes at 20 Mbps, used only as it fills),
-# and the Video Decoder's modes; your own mpv.conf still applies, and --mpv-args overrides these
+# the Video Decoder's modes, and the window moved only by its title bar (a click or drag on the picture is for the
+# control bar and the menus); your own mpv.conf still applies, and --mpv-args overrides these
 DEFAULT_MPV_ARGS = ['--hwdec=auto-safe', '--demuxer-max-back-bytes=512MiB',
-                    f'--include={PROFILES_FILE}']
+                    f'--include={PROFILES_FILE}', '--window-dragging=no']
 # Emoji: the chat font has none, so they fall back to the colour emoji font, whose glyphs are pictures, not outlines.
 # The overlay draws them as unreadable shapes, and while any are on screen video frames drop (measured: 12-55 a second
 # for each 🤡x7 message, until it scrolled off). The overlay leaves them out; the terminal still shows them.
@@ -82,10 +83,12 @@ def streamer_name(platform: str, room: str):
 
 
 class Player:
-    def __init__(self, rooms_path: str, quality: str = None, overlay: bool = True, mpv_args=None):
-        self.rooms_path, self.overlay = rooms_path, overlay
+    def __init__(self, rooms_path: str, quality: str = None, overlay: bool = True, mpv_args=None,
+                 echo_chat: bool = True):
+        self.rooms_path, self.overlay, self.echo_chat = rooms_path, overlay, echo_chat
         self.auto = q.Auto()
         self.flow, self.resynced = q.Flow(), -math.inf   # how the stream arrives and plays; the last re-sync
+        self.display_resyncs, self.smooth_off = [], False   # re-syncs while High quality timed video to the display
         self.tiers, self.tier = [], None             # the current room's levels and the one playing
         self.stalled_since = None
         self.live = {}                               # (platform, room) -> True/False: online markers in the room lists
@@ -178,7 +181,8 @@ class Player:
     async def _chat(self, gen):
         try:
             async for nick, text in gen:
-                print_chat(nick, text, self.color)
+                if self.echo_chat:
+                    print_chat(nick, text, self.color)
                 shown = overlay_text(text) if self.overlay else ''
                 if shown:
                     await self.mpv.command('script-message', 'cnlv-danmaku', shown)
@@ -381,8 +385,35 @@ class Player:
             if self.flow.out_of_step() and now - self.resynced > 10:
                 self.resynced = now
                 self.flow.restart_play()
+                display_sync = await self.mpv.get('display-sync-active')
                 await self.mpv.command('seek', 0, 'relative+exact')
-                print('-- Picture and sound out of step: re-synced', flush=True)
+                print(f'-- Picture and sound out of step (A/V {avsync or 0:+.2f} s): re-synced', flush=True)
+                if display_sync and not self.smooth_off:
+                    self.display_resyncs = [t for t in self.display_resyncs if now - t < self.SMOOTH_WINDOW] + [now]
+                    if len(self.display_resyncs) >= self.SMOOTH_LIMIT:
+                        await self.smooth_motion_off()
+
+    # High quality times the video to the display (video-sync=display-resample). When the display's timing as mpv
+    # sees it is wrong, as it can be on a laptop whose separate graphics chip draws for a screen wired to the
+    # built-in one, the picture keeps falling behind the sound, and mpv catches up by skipping frames: fast motion.
+    # Re-syncing twice within two minutes means it keeps happening, so High quality times the video to the sound
+    # instead, for the rest of this run: the sharper scaling stays, the frame blending goes.
+    SMOOTH_LIMIT, SMOOTH_WINDOW = 2, 120
+
+    async def smooth_motion_off(self):
+        self.smooth_off = True
+        facts = {n: await self.mpv.get(n) for n in ('display-fps', 'estimated-display-fps', 'vsync-jitter',
+                                                     'container-fps', 'current-gpu-context', 'hwdec-current')}
+        await self.apply_smooth_off()
+        await self.mpv.show('Smooth motion off: the picture kept running ahead\n'
+                            'High quality now keeps time with the sound', 4)
+        print('-- Smooth motion off for this run, video timed to the sound: '
+              + ', '.join(f'{k} {v:.3f}' if isinstance(v, float) else f'{k} {v}' for k, v in facts.items()),
+              flush=True)
+
+    async def apply_smooth_off(self):
+        await self.mpv.command('set_property', 'video-sync', 'audio')
+        await self.mpv.command('set_property', 'interpolation', False)
 
     async def auto_up(self):
         """Every 30 s: after a calm stretch, Auto tries one level up."""
@@ -420,6 +451,8 @@ class Player:
         """Switch mpv to a mode: its profile, and on a computer with two graphics chips, that mode's chip."""
         before, self.mode = self.gpu_for.get(self.mode), mode
         await self.mpv.command('apply-profile', PROFILES[mode])
+        if self.smooth_off and mode == 'high':
+            await self.apply_smooth_off()
         chip = self.gpu_for.get(mode)
         if chip != before:
             for k, v in hardware.gpu_options(chip).items():

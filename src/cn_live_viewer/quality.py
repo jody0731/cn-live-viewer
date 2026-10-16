@@ -84,7 +84,8 @@ class Flow:
     is empty. That stall is not the connection: the stream kept arriving in real time. Auto steps down only when it
     didn't, and a picture racing ahead is put back in step with the sound."""
     WINDOW, MIN_SPAN, IN_TIME = 20, 5, 0.95          # arrival: judged over up to 20 s (at least 5), in time >= 95 %
-    RACE_SPAN, RACE_RATE, OUT_OF_STEP = 3, 1.25, 0.5  # racing: 25 % faster than the clock for 3 s, or A/V 0.5 s apart
+    RACE_SPAN, RACE_RATE, OUT_OF_STEP = 2, 1.15, 0.3  # racing: 15 % faster than the clock for 2 s, or A/V 0.3 s apart
+    JUMP = 5                                         # the position moving 5 s more than the clock: a jump, not racing
 
     def __init__(self):
         self.reset()
@@ -106,6 +107,10 @@ class Flow:
                     self.arrived = []
             self.arrived.append((now, newest))
         if playing and pos is not None:
+            if self.played:
+                t, p, _ = self.played[-1]
+                if not -1 <= pos - p <= now - t + self.JUMP:  # a timestamp jump in the stream
+                    self.restart_play()
             self.played.append((now, pos, avsync))
         else:
             self.restart_play()

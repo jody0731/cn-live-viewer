@@ -598,3 +598,25 @@ ran the installer in PowerShell 7 with Python already installed.
   with two monitors `display-width`/`display-height` reported 5040x2681, matching neither monitor, while `40%x40%`
   meant 40% of the 4K one. Pixel sizes behave: `--geometry=1536x864` gives a 1536x864 (physical) window at 1.8x
   scaling, the same numbers `osd-dimensions` reports. So the window size is kept in pixels.
+
+### Fast motion in High quality on Windows (0.13.0)
+
+- **Report:** on the Windows laptop (a separate and a built-in graphics chip), the picture still ran fast at
+  times, above all in High quality.
+- **Why High quality:** it uses `video-sync=display-resample`, where mpv shows each frame for a number of display
+  refreshes. In `handle_display_sync_frame` (player/video.c), when the picture is behind the sound by at least one
+  refresh it takes `av_diff / vsync` refreshes away, up to the frame's whole share, so frames are skipped as fast as
+  they decode: fast-forward until it has caught up. With the display's timing wrong as mpv sees it (likely when the
+  separate chip draws for a panel wired to the built-in one, where DXGI's frame statistics can't be read), the
+  picture falls behind again and again. Not confirmed on the laptop yet.
+- **Changes:**
+  - racing is caught sooner: 15% faster than the clock over 2 s (was 25% over 3 s; display-resample's own
+    correction is about 1%), or `avsync` above 0.3 s throughout (was 0.5 s);
+  - a jump in the position by more than the clock plus 5 s is a timestamp jump in the stream, not racing, even
+    without mpv's `seek` event;
+  - two re-syncs within two minutes while `display-sync-active` switch High quality to `video-sync=audio` without
+    interpolation for the rest of the run, and log mpv's `display-fps`, `estimated-display-fps`, `vsync-jitter`,
+    `container-fps`, `current-gpu-context` and `hwdec-current`, to tell what the laptop's display timing was;
+  - started from the launcher (no terminal), that output goes to `cn-live-viewer.log` beside the room list.
+- **Window dragging:** mpv moves the window when the picture is dragged (`window-dragging`), which got in the way of
+  the seek strip and clicks; it's off, so the title bar moves the window.

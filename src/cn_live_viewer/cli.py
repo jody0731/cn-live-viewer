@@ -44,6 +44,20 @@ def setup_console() -> None:
         os.system('')                                # turns on colour codes in the Windows console
 
 
+LOG_NAME = 'cn-live-viewer.log'
+
+
+def log_to_file(path: str) -> None:
+    """Started from the app launcher there's no terminal to print to: what it would show (rooms, quality changes,
+    re-syncs, errors; not the chat) goes to a log beside the room list instead, started afresh each time."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        log = open(path, 'w', encoding='utf-8', errors='replace', buffering=1)
+    except OSError:
+        return
+    sys.stdout = sys.stderr = log
+
+
 def main(argv=None):
     setup_console()
     p = argparse.ArgumentParser(prog='cn-live-viewer', usage=USAGE, add_help=True)
@@ -58,6 +72,8 @@ def main(argv=None):
     p.add_argument('-V', '--version', action='version', version=f'cn-live-viewer {__version__}')
     p.add_argument('--launcher', action='store_true', help=argparse.SUPPRESS)   # started from the app launcher
     a = p.parse_args(argv)
+    if a.launcher:
+        log_to_file(os.path.join(os.path.dirname(os.path.abspath(a.rooms)), LOG_NAME))
     logging.basicConfig(level=logging.INFO if a.verbose else logging.WARNING, format='-- %(message)s')
 
     roomlist.ensure(a.rooms)
@@ -121,7 +137,8 @@ def main(argv=None):
             asyncio.run(chat_only())
             return 0
         desktop.ensure(os.path.dirname(os.path.abspath(a.rooms)))   # the app launcher, the first time
-        player = Player(a.rooms, a.quality, overlay=not a.no_overlay, mpv_args=shlex.split(a.mpv_args))
+        player = Player(a.rooms, a.quality, overlay=not a.no_overlay, mpv_args=shlex.split(a.mpv_args),
+                        echo_chat=not a.launcher)
         asyncio.run(player.run(candidates))
         return 0
     except LookupError as e:

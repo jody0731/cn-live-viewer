@@ -95,6 +95,23 @@ class FlowTest(unittest.TestCase):
             f.sample(i, 100 + i, 77 + i, True)
         self.assertFalse(f.out_of_step())
 
+    def test_a_display_sync_catch_up_is_racing(self):
+        f = q.Flow()
+        self.feed(f, 3, play=1.2)                           # frames skipped to catch up with the sound
+        self.assertTrue(f.out_of_step())
+
+    def test_small_steady_offsets_are_in_step(self):
+        f = q.Flow()
+        self.feed(f, 6, play=1.01, avsync=0.05)             # display-resample's own 1 % and normal jitter
+        self.assertFalse(f.out_of_step())
+
+    def test_a_position_jump_isnt_racing_even_unreported(self):
+        f = q.Flow()
+        self.feed(f, 2)
+        for i in range(3, 6):                               # the stream's timestamps jumped 40 s, no seek event
+            f.sample(i, 100 + i, 90 + i, True)
+        self.assertFalse(f.out_of_step())
+
     def test_a_timestamp_jump_starts_the_arrival_check_over(self):
         f = q.Flow()
         self.feed(f, 10)

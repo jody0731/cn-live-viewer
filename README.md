@@ -204,7 +204,7 @@ Right-click, Video Decoder, switches at once. The choice is kept for the next st
 |---|---|
 | **Auto** (default) | Picks one of the two modes at each start. Efficient on battery, when the CPU is already busy (over 70%), or with only built-in graphics. High quality on mains power with a separate graphics card, and on Macs. |
 | **Efficient** | mpv's standard picture. A new frame is drawn only when the video has one (30 or 60 a second), and the chat moves up to 60 times a second. |
-| **High quality** | Sharper upscaling (`ewa_lanczossharp`). The video is timed to the display and frames are blended in between, so 30 and 60 fps streams move smoothly at 144 Hz and up. The chat moves up to 120 times a second. |
+| **High quality** | Sharper upscaling (`ewa_lanczossharp`). The video is timed to the display and frames are blended in between, so 30 and 60 fps streams move smoothly at 144 Hz and up. The chat moves up to 120 times a second. If the picture keeps running ahead of the sound (the display's timing is off), it times the video to the sound instead for the rest of that run. |
 
 **Two graphics chips** (most gaming laptops: a built-in Intel or AMD chip and a separate NVIDIA or AMD one):
 Efficient runs on the built-in chip and High quality on the separate one, so High quality doesn't stutter on the
@@ -238,7 +238,7 @@ back at the next start.
 cn-live-viewer starts its own mpv with these options:
 
 ```text
---hwdec=auto-safe --demuxer-max-back-bytes=512MiB --volume=<kept> --mute=<kept> --window-maximized=<kept> --geometry=<kept size> --fullscreen=<kept> --auto-window-resize=no --include=<the Video Decoder modes> --profile=<the mode>
+--hwdec=auto-safe --demuxer-max-back-bytes=512MiB --volume=<kept> --mute=<kept> --window-maximized=<kept> --geometry=<kept size> --fullscreen=<kept> --auto-window-resize=no --include=<the Video Decoder modes> --window-dragging=no --profile=<the mode>
 ```
 
 - `--demuxer-max-back-bytes=512MiB` keeps up to 512 MiB of watched video in memory, so you can go back about 3.5
@@ -280,6 +280,9 @@ cn-live-viewer --mpv-args="--script-opts=cnlv-danmaku-max_on_screen=30,cnlv-danm
 
 - **Something's missing, or it doesn't start:** run `cn-live-viewer check`. It lists what's in place and what's
   missing.
+- **Started from the app launcher, what happened?** `cn-live-viewer.log` beside the room list (Windows
+  `%APPDATA%\cn-live-viewer`, others `~/.config/cn-live-viewer`) has what the terminal would show, from the
+  last start.
 - **"offline or not found":** the room isn't live, or the number is wrong. Try the room's full link.
 - **No chat:**
   - run with `-v` to see the connection log;
