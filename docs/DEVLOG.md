@@ -634,3 +634,15 @@ ran the installer in PowerShell 7 with Python already installed.
 - **Change:** a stall while the stream arrives in time, with `display-sync-active`, counts toward the same
   two-in-two-minutes limit as a re-sync (`Player.display_ran_ahead`). Re-test: smooth motion went off at 7.7 s,
   3 stalls in 90 s.
+
+### Fullscreen that wouldn't leave on Windows (0.13.2)
+
+- **Report:** after a double-click into fullscreen, it wouldn't go back to a window.
+- **Measured:** the double-click does reach mpv both times (`MBTN_LEFT_DBL` -> `cycle fullscreen`, entering then
+  leaving). Maximized, the window's client area was 3840x2036 at y=40 (title bar and taskbar); after leaving
+  fullscreen it stayed at `0:0:3840:2160` with no title bar. Plain mpv 0.41.0-dev with `--no-config
+  --window-maximized=yes` does the same, so it's mpv's win32 window code, not cn-live-viewer's options.
+- **Change:** bar.lua, on Windows, sets `window-maximized` to false and 50 ms later back to true when fullscreen
+  ends on a maximized window. Set straight back, mpv sees no change and nothing happens (tried: the window stayed
+  full-screen-sized). Re-test through the app over IPC, twice: 3840x2036 again after leaving; the saved window
+  settings unchanged.

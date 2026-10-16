@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.13.2 (2026-10-16)
+
+- **Leaving fullscreen on Windows:** from a maximized window, a double-click (or F) into fullscreen and back left
+  the window covering the whole screen without a title bar, so it still looked fullscreen. It's maximized again.
+
 ## 0.13.1 (2026-10-16)
 
 - **Constant stalls in High quality:** on a desktop with a 160 Hz display, the picture ran ahead so fast that the

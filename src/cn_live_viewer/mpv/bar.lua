@@ -430,6 +430,20 @@ mp.observe_property("osd-dimensions", "native", function(_, d)
     render()
 end)
 
+-- Windows: leaving fullscreen from a maximized window, mpv (0.41) keeps the window over the whole screen with no
+-- title bar, so it still looks fullscreen. Maximizing it again puts it back (after a moment: set straight back,
+-- mpv sees no change).
+if mp.get_property("platform") == "windows" then
+    local was_fullscreen = mp.get_property_bool("fullscreen")
+    mp.observe_property("fullscreen", "bool", function(_, fs)
+        if was_fullscreen and not fs and mp.get_property_bool("window-maximized") then
+            mp.set_property_bool("window-maximized", false)
+            mp.add_timeout(0.05, function() mp.set_property_bool("window-maximized", true) end)
+        end
+        was_fullscreen = fs
+    end)
+end
+
 for _, p in ipairs({ "pause", "mute", "volume", "fullscreen", "media-title", "user-data/cnlv/chat",
                     "user-data/cnlv/quality" }) do
     mp.observe_property(p, "native", function() if visible then render() end end)
