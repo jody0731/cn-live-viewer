@@ -620,3 +620,17 @@ ran the installer in PowerShell 7 with Python already installed.
   - started from the launcher (no terminal), that output goes to `cn-live-viewer.log` beside the room list.
 - **Window dragging:** mpv moves the window when the picture is dragged (`window-dragging`), which got in the way of
   the seek strip and clicks; it's off, so the title bar moves the window.
+
+### Stalls instead of re-syncs in High quality (0.13.1)
+
+- **Report:** Windows desktop, RTX 3080, 160 Hz HDR display, Huya 20 Mbps at 1080p60. In High quality the log
+  showed one re-sync, then "The buffer ran dry, but the stream arrives in time" over and over.
+- **Measured:** 95 s gave 49 `Enter buffering` (about 0.7 s of play, then 1 s waiting), and mpv warned of A/V
+  desync. mpv's own `estimated-display-fps` was 159.9 with no `vsync-jitter`, but libplacebo's interpolation logged
+  display FPS estimates of 3200 and 4800. Same with `--target-colorspace-hint=no` (25 stalls in 50 s);
+  `--video-sync=audio` gave none.
+- **Why the 0.13.0 fallback missed it:** `Flow.out_of_step` needs 2 s of steady play, and every stall restarts it,
+  so with a stall every 1.7 s racing was caught about once.
+- **Change:** a stall while the stream arrives in time, with `display-sync-active`, counts toward the same
+  two-in-two-minutes limit as a re-sync (`Player.display_ran_ahead`). Re-test: smooth motion went off at 7.7 s,
+  3 stalls in 90 s.

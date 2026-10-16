@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.1 (2026-10-16)
+
+- **Constant stalls in High quality:** on a desktop with a 160 Hz display, the picture ran ahead so fast that the
+  buffer ran dry every second or two, while the stream arrived in time. Each stall restarted the racing check
+  before it had 2 s to judge, so the fallback to sound timing never came. A stall while the stream arrives in time
+  now counts like a re-sync, and two within two minutes switch High quality to sound timing as in 0.13.0.
+
 ## 0.13.0 (2026-10-16)
 
 - **Fast motion in High quality:** High quality times the video to the display. When the display's timing as mpv

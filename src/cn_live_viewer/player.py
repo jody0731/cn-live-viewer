@@ -349,7 +349,13 @@ class Player:
             return
         now = time.monotonic()
         self.stalled_since = now
-        if self.choice != q.AUTO or not self.connection_behind():
+        behind = self.connection_behind()
+        if not behind:
+            # Playback ran ahead of a stream arriving in time. When High quality times the video to the display,
+            # that is the display timing (see SMOOTH_LIMIT): the stalls can come too often for watch_flow to see
+            # 2 s of steady racing, so they count like its re-syncs.
+            await self.display_ran_ahead(now)
+        if self.choice != q.AUTO or not behind:
             return
         if self.auto.stall_started(now):
             await self.step_down()
@@ -388,10 +394,8 @@ class Player:
                 display_sync = await self.mpv.get('display-sync-active')
                 await self.mpv.command('seek', 0, 'relative+exact')
                 print(f'-- Picture and sound out of step (A/V {avsync or 0:+.2f} s): re-synced', flush=True)
-                if display_sync and not self.smooth_off:
-                    self.display_resyncs = [t for t in self.display_resyncs if now - t < self.SMOOTH_WINDOW] + [now]
-                    if len(self.display_resyncs) >= self.SMOOTH_LIMIT:
-                        await self.smooth_motion_off()
+                if display_sync:
+                    await self.display_ran_ahead(now, display_sync)
 
     # High quality times the video to the display (video-sync=display-resample). When the display's timing as mpv
     # sees it is wrong, as it can be on a laptop whose separate graphics chip draws for a screen wired to the
@@ -399,6 +403,19 @@ class Player:
     # Re-syncing twice within two minutes means it keeps happening, so High quality times the video to the sound
     # instead, for the rest of this run: the sharper scaling stays, the frame blending goes.
     SMOOTH_LIMIT, SMOOTH_WINDOW = 2, 120
+
+    async def display_ran_ahead(self, now: float, display_sync=None):
+        """The picture ran ahead (a re-sync, or a stall while the stream arrives in time). Counted only while the
+        video is timed to the display; SMOOTH_LIMIT of them within SMOOTH_WINDOW turn smooth motion off."""
+        if self.smooth_off:
+            return
+        if display_sync is None:
+            display_sync = await self.mpv.get('display-sync-active')
+        if not display_sync:
+            return
+        self.display_resyncs = [t for t in self.display_resyncs if now - t < self.SMOOTH_WINDOW] + [now]
+        if len(self.display_resyncs) >= self.SMOOTH_LIMIT:
+            await self.smooth_motion_off()
 
     async def smooth_motion_off(self):
         self.smooth_off = True
